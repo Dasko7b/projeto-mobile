@@ -1,14 +1,20 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { Flame, LayersPlus } from 'lucide-react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ImageBackground } from 'react-native';
 
 export default function LoginScreen({ navigation }: any) {
 
     function handleLogin() {
         navigation.navigate('Home');
     }
-    
+
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>FECHACONTA</Text>
+
+            <View style={styles.imageBackground}>
+                <Flame size={80} color="#ff0000" fill="#ff0000" />
+            </View>
+
+            <Text style={styles.title}>FechaConta</Text>
 
             <TextInput
                 placeholder="Email"
@@ -33,14 +39,15 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         padding: 24,
-        backgroundColor: '#fff',
+        backgroundColor: '#ffffff',
     },
 
     title: {
-        fontSize: 32,
-        fontWeight: 'bold',
         marginBottom: 32,
         textAlign: 'center',
+        fontFamily: 'Inter_700Bold',
+        fontSize: 38,
+        color: '#112332'
     },
 
     input: {
@@ -61,5 +68,10 @@ const styles = StyleSheet.create({
     buttonText: {
         color: '#fff',
         fontWeight: 'bold',
+    },
+
+    imageBackground: {
+        margin: 'auto',
+        marginVertical: 0,
     },
 });

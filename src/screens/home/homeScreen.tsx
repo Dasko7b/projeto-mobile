@@ -22,7 +22,7 @@ export default function HomeScreen({ navigation }: any) {
                 <Flame size={55} color="#ff0000" fill="#ff0000" />
             </Text>
 
-            {list && <ListGroup />}
+            {list && <ListGroup navigation={navigation} />}
 
 
             <ImageBackground

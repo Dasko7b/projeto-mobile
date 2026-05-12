@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/auth/LoginScreen';
 import HomeScreen from '../screens/home/homeScreen';
 import CreateGroupScreen from '../screens/group/createGroupForm';
+import GroupDetailScreen from '../screens/group/groupDetailScreen';
 import Header from '../components/header';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -36,6 +37,12 @@ export default function Routes() {
                             name="CreateGroup"
                             component={CreateGroupScreen}
                             options={{ headerShown: false }}
+                        />
+
+                        <Stack.Screen
+                            name="GroupDetail"
+                            component={GroupDetailScreen}
+                            options={{ headerShown: true }}
                         />
                     </Stack.Navigator>
                 </NavigationContainer>

@@ -27,7 +27,17 @@ const courses = [
     },
 ];
 
-export default function ListGroup() {
+interface ListGroupProps {
+    navigation?: any;
+}
+
+export default function ListGroup({ navigation }: ListGroupProps) {
+    const handleGroupPress = (group: any) => {
+        if (navigation) {
+            navigation.navigate('GroupDetail', { group });
+        }
+    };
+
     return (
         <View style={styles.container}>
             <FlatList
@@ -41,6 +51,7 @@ export default function ListGroup() {
                 }}
                 renderItem={({ item }) => (
                     <TouchableOpacity
+                        onPress={() => handleGroupPress(item)}
                         style={[
                             styles.card,
                             { backgroundColor: item.color },

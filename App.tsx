@@ -1,5 +1,6 @@
-import Routes from './src/navigations';
+import { AuthProvider } from './src/context/AuthContext';
 import { useFonts, Inter_700Bold, Inter_400Regular } from '@expo-google-fonts/inter';
+import { RootNavigator } from './src/navigations/RootNavigator';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -11,6 +12,14 @@ export default function App() {
     return null;
   }
 
-  return <Routes />;
+  return (
+
+    <AuthProvider>
+
+      <RootNavigator />
+
+    </AuthProvider>
+
+  );
 }
 

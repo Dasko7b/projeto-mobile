@@ -1,36 +1,88 @@
-import { Flame, LayersPlus } from 'lucide-react-native';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ImageBackground } from 'react-native';
+import { Flame } from 'lucide-react-native';
+import { useState } from 'react';
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    StyleSheet,
+    KeyboardAvoidingView,
+    ScrollView,
+    Platform
+} from 'react-native';
 
 export default function RegisterScreen({ navigation }: any) {
+    const [email, setEmail] = useState('');
+    const [senha, setSenha] = useState('');
+    const [confirmarSenha, setConfirmarSenha] = useState('');
+
+    const [senhasIguais, setSenhasIguais] = useState(true);
 
     function handleRegister() {
-        navigation.navigate('Home');
+        if (senha === confirmarSenha) {
+            setSenhasIguais(true);
+            navigation.navigate('Home');
+        } else {
+            setSenhasIguais(false);
+        }
     }
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+            <ScrollView
+                contentContainerStyle={{ flexGrow: 1 }}
+                keyboardShouldPersistTaps="handled"
+            >
+                <View style={styles.container}>
 
-            <View style={styles.imageBackground}>
-                <Flame size={80} color="#ff0000" fill="#ff0000" />
-            </View>
+                    <View style={styles.imageBackground}>
+                        <Flame size={80} color="#ff0000" fill="#ff0000" />
+                    </View>
 
-            <Text style={styles.title}>FechaConta</Text>
+                    <Text style={styles.title}>FechaConta</Text>
 
-            <TextInput
-                placeholder="Email"
-                style={styles.input}
-            />
+                    <TextInput
+                        placeholder="Email"
+                        style={styles.input}
+                        value={email}
+                        onChangeText={setEmail}
+                    />
 
-            <TextInput
-                placeholder="Senha"
-                secureTextEntry
-                style={styles.input}
-            />
+                    <TextInput
+                        placeholder="Senha"
+                        secureTextEntry
+                        style={styles.input}
+                        value={senha}
+                        onChangeText={setSenha}
+                    />
 
-            <TouchableOpacity style={styles.button} onPress={() => handleRegister()}>
-                <Text style={styles.buttonText}>Cadastrar</Text>
-            </TouchableOpacity>
-        </View>
+                    <TextInput
+                        placeholder="Confirme a sua Senha"
+                        secureTextEntry
+                        style={styles.input}
+                        value={confirmarSenha}
+                        onChangeText={setConfirmarSenha}
+                    />
+
+                    <TouchableOpacity
+                        style={styles.button}
+                        onPress={handleRegister}
+                    >
+                        <Text style={styles.buttonText}>Cadastrar</Text>
+                    </TouchableOpacity>
+
+                    {!senhasIguais &&
+                        <Text style={{ color: '#ff0000', fontSize: 14 }}>
+                            Senhas diferentes, tente novamente!
+                        </Text>
+                    }
+
+                </View>
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 }
 

@@ -7,6 +7,10 @@ export default function LoginScreen({ navigation }: any) {
         navigation.navigate('Home');
     }
 
+    function handleregister() {
+        navigation.navigate('Register');
+    }
+
     return (
         <View style={styles.container}>
 
@@ -29,6 +33,15 @@ export default function LoginScreen({ navigation }: any) {
 
             <TouchableOpacity style={styles.button} onPress={() => handleLogin()}>
                 <Text style={styles.buttonText}>Entrar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={{ marginTop: 20, padding: 10, alignItems: 'center' }}
+                onPress={() => handleregister()}
+            >
+                <Text style={{ color: '#666', fontSize: 14 }}>
+                    Não tem uma conta? <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>Cadastre-se</Text>
+                </Text>
             </TouchableOpacity>
         </View>
     );

@@ -1,7 +1,7 @@
 import { Flame, LayersPlus, Navigation } from 'lucide-react-native';
 import { useState } from 'react';
 import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import ListGroup from '../group/listGroup';
+import ListGroup from '../groups/listGroup';
 import { ScrollView } from 'react-native-gesture-handler';
 
 export default function HomeScreen({ navigation }: any) {

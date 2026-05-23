@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
     FlatList,
     StyleSheet,
@@ -32,11 +33,33 @@ interface ListGroupProps {
 }
 
 export default function ListGroup({ navigation }: ListGroupProps) {
+    const [groups, setGroups] = useState([]);
+    const [refreshing, setRefreshing] = useState(false);
+
     const handleGroupPress = (group: any) => {
         if (navigation) {
             navigation.navigate('GroupDetail', { group });
         }
     };
+
+    async function loadGroups() {
+        try {
+            const response = await fetch(""); //trocar pela url da api
+            const data = await response.json();
+
+            setGroups(data);
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    async function handleRefresh() {
+        setRefreshing(true);
+
+        await loadGroups();
+
+        setRefreshing(false);
+    }
 
     return (
         <View style={styles.container}>
@@ -45,6 +68,8 @@ export default function ListGroup({ navigation }: ListGroupProps) {
                 scrollEnabled={false}
                 keyExtractor={(item) => item.id}
                 showsVerticalScrollIndicator={false}
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
                 contentContainerStyle={{
                     padding: 0,
                     gap: 20,

@@ -2,9 +2,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/auth/LoginScreen';
 import HomeScreen from '../screens/home/homeScreen';
-import CreateGroupScreen from '../screens/group/createGroupForm';
-import GroupDetailScreen from '../screens/group/groupDetailScreen';
-import Header from '../components/header';
+import CreateGroupScreen from '../screens/groups/createGroupForm';
+import GroupDetailScreen from '../screens/groups/groupDetailScreen';
+import Header from '../components/Header/Header';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 

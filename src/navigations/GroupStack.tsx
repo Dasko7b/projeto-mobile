@@ -1,8 +1,8 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-
 import GroupsScreen from "../screens/groups/GroupsScreen";
 import GroupDetailsScreen from "../screens/groups/GroupDetailsScreen";
 import AddExpenseModal from "../screens/groups/AddExpenseModal";
+
 
 const Stack = createNativeStackNavigator();
 

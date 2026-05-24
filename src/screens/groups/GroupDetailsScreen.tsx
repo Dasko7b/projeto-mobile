@@ -9,9 +9,10 @@ import {
     ImageBackground,
     Modal,
     ScrollView,
+    Share,
     TextInput,
 } from 'react-native';
-import { ArrowLeft, CreditCard, DollarSign, Plus, ReceiptText, X } from 'lucide-react-native';
+import { ArrowLeft, CreditCard, DollarSign, Plus, ReceiptText, Share2, UserPlus, X } from 'lucide-react-native';
 
 type GroupData = {
     id: string;
@@ -128,11 +129,15 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
     const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
     const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
     const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
+    const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
     const [paymentValue, setPaymentValue] = useState('');
     const [paymentError, setPaymentError] = useState('');
     const modalTranslateY = useRef(new Animated.Value(420)).current;
     const paymentModalTranslateY = useRef(new Animated.Value(360)).current;
     const historyModalTranslateY = useRef(new Animated.Value(620)).current;
+    const inviteModalTranslateY = useRef(new Animated.Value(360)).current;
+    const groupCode = 'Ex93892';
+    const groupName = group?.title ?? 'meu grupo';
     const totalDivida = 1000;
     const dividaAtual = 350;
     const totalPago = 650;
@@ -210,6 +215,29 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
         }).start(() => setIsHistoryModalVisible(false));
     }
 
+    function handleOpenInviteModal() {
+        setIsInviteModalVisible(true);
+        Animated.timing(inviteModalTranslateY, {
+            toValue: 0,
+            duration: 260,
+            useNativeDriver: true,
+        }).start();
+    }
+
+    function handleCloseInviteModal() {
+        Animated.timing(inviteModalTranslateY, {
+            toValue: 360,
+            duration: 220,
+            useNativeDriver: true,
+        }).start(() => setIsInviteModalVisible(false));
+    }
+
+    async function handleShareInvite() {
+        await Share.share({
+            message: `Entre no grupo "${groupName}" no FechaConta usando o código ${groupCode}.`,
+        });
+    }
+
     return (
         <ScrollView
             style={styles.container}
@@ -237,8 +265,8 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                     renderItem={({ item }) => (
                         <View style={styles.memberItem}>
                             {item.add ? (
-                                <TouchableOpacity style={styles.addButton}>
-                                    <Plus size={28} color="#111" />
+                                <TouchableOpacity style={styles.addButton} onPress={handleOpenInviteModal}>
+                                    <UserPlus size={26} color="#111" />
                                 </TouchableOpacity>
                             ) : (
                                 <ImageBackground
@@ -247,10 +275,10 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                                     imageStyle={styles.avatar}
                                 />
                             )}
-                            <Text style={styles.memberName}>{item.name}</Text>
-                        </View>
-                    )}
-                />
+                        <Text style={styles.memberName}>{item.name}</Text>
+                    </View>
+                )}
+            />
 
                 <View style={[styles.balanceCard, { backgroundColor: group?.color ?? '#f4f4f4' }]}>
                     <Text style={styles.label}>Saldo da dívida</Text>
@@ -520,6 +548,61 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                     </Animated.View>
                 </View>
             </Modal>
+
+            <Modal
+                transparent
+                visible={isInviteModalVisible}
+                animationType="none"
+                onRequestClose={handleCloseInviteModal}
+            >
+                <View style={styles.modalOverlay}>
+                    <TouchableOpacity
+                        activeOpacity={1}
+                        style={styles.modalBackdrop}
+                        onPress={handleCloseInviteModal}
+                    />
+
+                    <Animated.View
+                        style={[
+                            styles.inviteModal,
+                            { transform: [{ translateY: inviteModalTranslateY }] },
+                        ]}
+                    >
+                        <View style={styles.modalHandle} />
+
+                        <View style={styles.modalHeader}>
+                            <View>
+                                <Text style={styles.modalTitle}>Convidar Amigo</Text>
+                                <Text style={styles.modalSubtitle}>
+                                    Compartilhe o código de acesso do grupo
+                                </Text>
+                            </View>
+                            <TouchableOpacity style={styles.closeButton} onPress={handleCloseInviteModal}>
+                                <X size={22} color="#112332" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.inviteCodeCard}>
+                            <Text style={styles.inviteCodeLabel}>Código do grupo</Text>
+                            <Text style={styles.inviteCode}>{groupCode}</Text>
+                            <Text style={styles.inviteCodeHint}>
+                                Envie este código para a pessoa entrar no grupo.
+                            </Text>
+                        </View>
+
+                        <View style={styles.inviteActions}>
+                            <TouchableOpacity style={styles.cancelButton} onPress={handleCloseInviteModal}>
+                                <Text style={styles.cancelButtonText}>Cancelar</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.shareButton} onPress={handleShareInvite}>
+                                <Share2 size={20} color="#fff" />
+                                <Text style={styles.shareButtonText}>Compartilhar</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Animated.View>
+                </View>
+            </Modal>
         </ScrollView>
     );
 }
@@ -602,6 +685,21 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#4c5863',
         textAlign: 'center',
+    },
+    inviteButton: {
+        minHeight: 52,
+        borderRadius: 26,
+        backgroundColor: '#112332',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        marginBottom: 10,
+    },
+    inviteButtonText: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '800',
     },
     balanceCard: {
         width: '100%',
@@ -853,6 +951,68 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     payButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '800',
+    },
+    inviteModal: {
+        width: '100%',
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        paddingHorizontal: 24,
+        paddingTop: 12,
+        paddingBottom: 34,
+        backgroundColor: '#fff',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: -6,
+        },
+        shadowOpacity: 0.14,
+        shadowRadius: 16,
+        elevation: 12,
+    },
+    inviteCodeCard: {
+        borderRadius: 24,
+        padding: 22,
+        backgroundColor: '#f5f7f9',
+        alignItems: 'center',
+        marginBottom: 22,
+    },
+    inviteCodeLabel: {
+        fontSize: 13,
+        color: '#65717c',
+        fontWeight: '700',
+    },
+    inviteCode: {
+        marginTop: 8,
+        fontSize: 42,
+        fontWeight: '900',
+        color: '#112332',
+        letterSpacing: 1,
+    },
+    inviteCodeHint: {
+        marginTop: 10,
+        fontSize: 14,
+        lineHeight: 20,
+        color: '#65717c',
+        textAlign: 'center',
+    },
+    inviteActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    shareButton: {
+        flex: 1,
+        minHeight: 56,
+        borderRadius: 28,
+        backgroundColor: '#000',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    shareButtonText: {
         color: '#fff',
         fontSize: 16,
         fontWeight: '800',

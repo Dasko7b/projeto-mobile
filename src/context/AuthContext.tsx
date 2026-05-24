@@ -6,8 +6,7 @@ import {
 
 type AuthContextType = {
     user: User | null
-    session: string | null
-    totalBalance: number
+    setUser: React.Dispatch<React.SetStateAction<User | null>>
 }
 
 type User = {
@@ -17,7 +16,10 @@ type User = {
 }
 
 
-const AuthContext = createContext({});
+const AuthContext = createContext<AuthContextType>({
+    user: null,
+    setUser: () => null,
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 

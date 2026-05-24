@@ -1,10 +1,16 @@
-import { Flame, LayersPlus } from 'lucide-react-native';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ImageBackground } from 'react-native';
+import { Flame } from 'lucide-react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
 
 export default function LoginScreen({ navigation }: any) {
+    const { setUser } = useAuth();
 
     function handleLogin() {
-        navigation.navigate('Home');
+        setUser({
+            name: 'Usuário FechaConta',
+            email: 'usuario@fechaconta.app',
+            avatarUrl: 'https://i.pravatar.cc/150?img=12',
+        });
     }
 
     function handleregister() {

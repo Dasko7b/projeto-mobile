@@ -10,8 +10,10 @@ import {
     ScrollView,
     Platform
 } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
 
 export default function RegisterScreen({ navigation }: any) {
+    const { setUser } = useAuth();
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
     const [confirmarSenha, setConfirmarSenha] = useState('');
@@ -21,7 +23,11 @@ export default function RegisterScreen({ navigation }: any) {
     function handleRegister() {
         if (senha === confirmarSenha) {
             setSenhasIguais(true);
-            navigation.navigate('Home');
+            setUser({
+                name: 'Usuário FechaConta',
+                email: email || 'usuario@fechaconta.app',
+                avatarUrl: 'https://i.pravatar.cc/150?img=12',
+            });
         } else {
             setSenhasIguais(false);
         }

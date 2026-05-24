@@ -38,7 +38,7 @@ export default function ListGroup({ navigation }: ListGroupProps) {
 
     const handleGroupPress = (group: any) => {
         if (navigation) {
-            navigation.navigate('GroupDetail', { group });
+            navigation.navigate('GroupDetails', { group });
         }
     };
 

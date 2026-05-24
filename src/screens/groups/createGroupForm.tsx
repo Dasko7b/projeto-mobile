@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react-native';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 
 export default function CreateGroupScreen({ navigation }: any) {
 
     function handleNavigate() {
-        navigation.navigate('Home');
+        navigation.navigate('GroupsScreen');
     }
 
     const [selectedCategory, setSelectedCategory] = useState('');
@@ -19,7 +20,19 @@ export default function CreateGroupScreen({ navigation }: any) {
 
     return (
         <View style={styles.container}>
+            <View style={styles.header}>
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+                    <ArrowLeft size={22} color="#112332" />
+                </TouchableOpacity>
+
+                <Text style={styles.headerTitle}>Novo grupo</Text>
+            </View>
+
             <Text style={styles.title}>Criar Racha</Text>
+            <Text style={styles.description}>
+                Organize um grupo para dividir contas, acompanhar pagamentos e manter tudo no lugar.
+            </Text>
+
             <View>
                 <Text style={styles.label}>Nome do Racha</Text>
                 <TextInput placeholder="Nome do Racha" style={styles.input} />
@@ -62,21 +75,47 @@ export default function CreateGroupScreen({ navigation }: any) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        justifyContent: 'center',
         padding: 24,
         backgroundColor: '#fff',
-        gap: 12,
+        gap: 18,
+        paddingTop: 54,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        marginBottom: 8,
+    },
+    backButton: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: '#f1f5f9',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#112332',
     },
     title: {
         fontFamily: 'Inter_700Bold',
-        fontSize: 48,
+        fontSize: 42,
         color: '#112332',
+    },
+    description: {
+        fontSize: 16,
+        lineHeight: 24,
+        color: '#5f6b76',
+        marginBottom: 10,
     },
     input: {
         borderWidth: 1,
         borderColor: '#ccc',
         borderRadius: 8,
         padding: 14,
+        fontSize: 16,
     },
     button: {
         backgroundColor: '#000',

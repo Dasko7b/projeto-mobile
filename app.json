@@ -27,7 +27,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita que o FechaConta acesse suas fotos para anexar recibos as despesas.",
+          "cameraPermission": "Permita que o FechaConta use a camera para fotografar recibos das despesas."
+        }
+      ]
     ]
   }
 }

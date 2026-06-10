@@ -174,14 +174,14 @@ user_settlements_paid AS (
 user_settlements_received AS (
     -- Calcula quanto cada usuário recebeu em liquidações (extraindo o UUID do recebedor da descrição)
     -- O formato da descrição é 'Liquidação: para <UUID>'
-    -- Usamos SUBSTRING(descricao FROM 19 FOR 36) para extrair o UUID do recebedor
+    -- Usamos expressão regular para extrair com segurança o UUID de 36 caracteres
     SELECT 
         group_id,
-        CAST(SUBSTRING(descricao FROM 19 FOR 36) AS UUID) as user_id,
+        CAST(substring(descricao from '[0-9a-fA-F-]{36}') AS UUID) as user_id,
         SUM(valor) as total_recebido
     FROM public.expenses
     WHERE descricao LIKE 'Liquidação: para %'
-    GROUP BY group_id, SUBSTRING(descricao FROM 19 FOR 36)
+    GROUP BY group_id, substring(descricao from '[0-9a-fA-F-]{36}')
 )
 -- Cruza as informações para dar o saldo final
 SELECT 

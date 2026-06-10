@@ -28,7 +28,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../services/supabase';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }: any) {
     const { user, signOut, consolidatedBalance, refreshConsolidatedBalance, fetchUserProfile, session } = useAuth();
     
     if (!user) {
@@ -94,7 +94,15 @@ export default function ProfileScreen() {
 
     useEffect(() => {
         loadStats();
-    }, [currentUser.id]);
+        refreshConsolidatedBalance();
+
+        const unsubscribe = navigation?.addListener('focus', () => {
+            loadStats();
+            refreshConsolidatedBalance();
+        });
+
+        return unsubscribe;
+    }, [navigation, currentUser.id]);
 
     const handleRefresh = async () => {
         setRefreshing(true);

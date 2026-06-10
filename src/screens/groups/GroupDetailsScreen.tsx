@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
     Animated,
     Alert,
@@ -13,9 +13,16 @@ import {
     ScrollView,
     Share,
     TextInput,
+    ActivityIndicator,
+    RefreshControl,
+    Platform
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, Camera, CreditCard, DollarSign, Image as ImageIcon, Plus, ReceiptText, Share2, Trash2, UserPlus, X } from 'lucide-react-native';
+import { supabase } from '../../services/supabase';
+import { useAuth } from '../../context/AuthContext';
+import Loading from '../../components/Loading/Loading';
+import ExpenseCard from '../../components/ExpenseCard/ExpenseCard';
 
 type GroupData = {
     id: string;
@@ -25,107 +32,26 @@ type GroupData = {
     participants: number;
 };
 
-const friends = [
-    {
-        id: '1',
-        name: 'Adicionar',
-        add: true,
-    },
-    {
-        id: '2',
-        name: 'Adams',
-        image: 'https://i.pravatar.cc/150?img=1',
-    },
-    {
-        id: '3',
-        name: 'Ross',
-        image: 'https://i.pravatar.cc/150?img=2',
-    },
-    {
-        id: '4',
-        name: 'Keith',
-        image: 'https://i.pravatar.cc/150?img=3',
-    },
-    {
-        id: '5',
-        name: 'Laila',
-        image: 'https://i.pravatar.cc/150?img=4',
-    },
-];
+type Member = {
+    user_id: string;
+    users: {
+        id: string;
+        nome: string;
+        email: string;
+    };
+};
 
-const expenses = [
-    {
-        id: '1',
-        title: 'Mercado',
-        author: 'Matheus',
-        value: 128.9,
-    },
-    {
-        id: '2',
-        title: 'Pizza',
-        author: 'Thiago',
-        value: 86.5,
-    },
-];
-
-const historyItems = [
-    {
-        id: '1',
-        type: 'expense',
-        title: 'Mercado',
-        description: 'Matheus adicionou uma despesa',
-        value: 128.9,
-        date: 'Hoje, 14:20',
-    },
-    {
-        id: '2',
-        type: 'payment',
-        title: 'Pagamento recebido',
-        description: 'Thiago pagou parte da dívida',
-        value: 50,
-        date: 'Hoje, 12:05',
-    },
-    {
-        id: '3',
-        type: 'expense',
-        title: 'Pizza',
-        description: 'Thiago adicionou uma despesa',
-        value: 86.5,
-        date: 'Ontem, 21:44',
-    },
-    {
-        id: '4',
-        type: 'payment',
-        title: 'Pagamento recebido',
-        description: 'Ross pagou parte da dívida',
-        value: 72,
-        date: 'Ontem, 18:10',
-    },
-    {
-        id: '5',
-        type: 'expense',
-        title: 'Combustível',
-        description: 'Laila adicionou uma despesa',
-        value: 110,
-        date: 'Sábado, 09:32',
-    },
-    {
-        id: '6',
-        type: 'expense',
-        title: 'Bebidas',
-        description: 'Adams adicionou uma despesa',
-        value: 64.75,
-        date: 'Sexta, 20:18',
-    },
-    {
-        id: '7',
-        type: 'payment',
-        title: 'Pagamento recebido',
-        description: 'Laila pagou parte da dívida',
-        value: 45,
-        date: 'Sexta, 16:02',
-    },
-];
+type Expense = {
+    id: string;
+    descricao: string;
+    valor: number;
+    paid_by: string;
+    receipt_url: string | null;
+    created_at: string;
+    users?: {
+        nome: string;
+    };
+};
 
 type ReceiptImage = {
     uri: string;
@@ -133,58 +59,186 @@ type ReceiptImage = {
 };
 
 export default function GroupDetailsScreen({ route, navigation }: any) {
-    const group = route.params?.group as GroupData | undefined;
+    const group = route.params?.group as GroupData;
+    const { user, refreshConsolidatedBalance } = useAuth();
+
+    if (!group || !user) {
+        return <Loading />;
+    }
+
+    const currentUser = user;
+
+    const [members, setMembers] = useState<Member[]>([]);
+    const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+
+    // Modal States
     const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
     const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
     const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
     const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
+
+    // Expense Form States
+    const [expenseTitle, setExpenseTitle] = useState('');
+    const [expenseValue, setExpenseValue] = useState('');
+    const [selectedPayerId, setSelectedPayerId] = useState(currentUser.id);
+    const [receiptImage, setReceiptImage] = useState<ReceiptImage | null>(null);
+    const [expenseSaving, setExpenseSaving] = useState(false);
+
+    // Payment Form States
     const [paymentValue, setPaymentValue] = useState('');
     const [paymentError, setPaymentError] = useState('');
-    const [receiptImage, setReceiptImage] = useState<ReceiptImage | null>(null);
-    const modalTranslateY = useRef(new Animated.Value(420)).current;
+    const [paymentSaving, setPaymentSaving] = useState(false);
+    const [selectedReceiverId, setSelectedReceiverId] = useState<string>('');
+
+    // Animations
+    const modalTranslateY = useRef(new Animated.Value(450)).current;
     const paymentModalTranslateY = useRef(new Animated.Value(360)).current;
     const historyModalTranslateY = useRef(new Animated.Value(620)).current;
     const inviteModalTranslateY = useRef(new Animated.Value(360)).current;
-    const groupCode = 'Ex93892';
-    const groupName = group?.title ?? 'meu grupo';
-    const totalDivida = 1000;
-    const dividaAtual = 350;
-    const totalPago = 650;
 
-    function handleAddExpense() {
-        setIsExpenseModalVisible(true);
-        Animated.timing(modalTranslateY, {
-            toValue: 0,
-            duration: 260,
-            useNativeDriver: true,
-        }).start();
+    // Load Data
+    async function loadGroupData() {
+        try {
+            // 1. Fetch group members
+            const { data: membersData, error: membersError } = await supabase
+                .from('group_members')
+                .select('user_id, users ( id, nome, email )')
+                .eq('group_id', group.id);
+
+            if (membersError) throw membersError;
+            
+            if (membersData) {
+                const formattedMembers: Member[] = membersData.map((m: any) => ({
+                    user_id: m.user_id,
+                    users: Array.isArray(m.users) ? m.users[0] : m.users
+                }));
+                setMembers(formattedMembers);
+            } else {
+                setMembers([]);
+            }
+
+            // 2. Fetch expenses
+            const { data: expensesData, error: expensesError } = await supabase
+                .from('expenses')
+                .select('*, users:paid_by ( nome )')
+                .eq('group_id', group.id)
+                .order('created_at', { ascending: false });
+
+            if (expensesError) {
+                // Fallback query if relationship naming is different
+                const { data: fallbackData, error: fallbackError } = await supabase
+                    .from('expenses')
+                    .select('*')
+                    .eq('group_id', group.id)
+                    .order('created_at', { ascending: false });
+                
+                if (fallbackError) throw fallbackError;
+                
+                // Fetch user profiles separately
+                const { data: usersData } = await supabase.from('users').select('id, nome');
+                const userMap = new Map(usersData?.map((u: any) => [u.id, u.nome]) || []);
+                
+                const mapped: Expense[] = (fallbackData || []).map((exp: any) => ({
+                    ...exp,
+                    valor: Number(exp.valor),
+                    users: { nome: userMap.get(exp.paid_by) || 'Membro' }
+                }));
+                setExpenses(mapped);
+            } else {
+                const mapped: Expense[] = (expensesData || []).map((exp: any) => ({
+                    ...exp,
+                    valor: Number(exp.valor)
+                }));
+                setExpenses(mapped);
+            }
+        } catch (err: any) {
+            console.error("Erro ao carregar dados do grupo:", err);
+            Alert.alert("Erro", "Não foi possível carregar as informações do grupo.");
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
     }
 
-    function handleCloseExpenseModal() {
-        Animated.timing(modalTranslateY, {
-            toValue: 420,
-            duration: 220,
-            useNativeDriver: true,
-        }).start(() => {
-            setIsExpenseModalVisible(false);
-            setReceiptImage(null);
-        });
-    }
+    useEffect(() => {
+        loadGroupData();
+    }, [group.id]);
 
+    const handleRefresh = () => {
+        setRefreshing(true);
+        loadGroupData();
+        refreshConsolidatedBalance();
+    };
+
+    // Calculate Balances
+    const realExpenses = expenses.filter(exp => !exp.descricao.startsWith('Liquidação'));
+    const totalExpenses = realExpenses.reduce((sum, exp) => sum + exp.valor, 0);
+    const numberOfMembers = members.length;
+    const sharePerMember = numberOfMembers > 0 ? totalExpenses / numberOfMembers : 0;
+
+    const realPaidPerMember: { [userId: string]: number } = {};
+    const settlementsPaid: { [userId: string]: number } = {};
+    const settlementsReceived: { [userId: string]: number } = {};
+
+    members.forEach(m => { 
+        realPaidPerMember[m.user_id] = 0;
+        settlementsPaid[m.user_id] = 0;
+        settlementsReceived[m.user_id] = 0;
+    });
+
+    expenses.forEach(exp => {
+        if (exp.descricao.startsWith('Liquidação')) {
+            const payer = exp.paid_by;
+            let receiver = '';
+            if (exp.descricao.startsWith('Liquidação: para ')) {
+                receiver = exp.descricao.replace('Liquidação: para ', '').trim();
+            }
+
+            if (settlementsPaid[payer] !== undefined) {
+                settlementsPaid[payer] += exp.valor;
+            }
+            if (receiver && settlementsReceived[receiver] !== undefined) {
+                settlementsReceived[receiver] += exp.valor;
+            }
+        } else {
+            if (realPaidPerMember[exp.paid_by] !== undefined) {
+                realPaidPerMember[exp.paid_by] += exp.valor;
+            }
+        }
+    });
+
+    const calculatedBalances = members.map(m => {
+        const realPaid = realPaidPerMember[m.user_id] || 0;
+        const sPaid = settlementsPaid[m.user_id] || 0;
+        const sReceived = settlementsReceived[m.user_id] || 0;
+        const balance = (realPaid - sharePerMember) + sPaid - sReceived;
+        return {
+            id: m.user_id,
+            name: m.users?.nome || 'Membro',
+            avatar: `https://i.pravatar.cc/150?u=${m.user_id}`,
+            paid: realPaid,
+            balance: balance
+        };
+    });
+
+    const myBalanceItem = calculatedBalances.find(b => b.id === currentUser.id);
+    const myBalance = myBalanceItem ? myBalanceItem.balance : 0;
+    const myPaid = myBalanceItem ? myBalanceItem.paid : 0;
+
+    // Image Picker Flow
     async function pickReceiptFromCamera() {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
-
         if (!permission.granted) {
-            Alert.alert('Permissao necessaria', 'Autorize o acesso a camera para fotografar o recibo.');
+            Alert.alert('Permissão necessária', 'Autorize o acesso à câmera para fotografar o recibo.');
             return;
         }
-
         const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
             quality: 0.8,
         });
-
         if (!result.canceled && result.assets[0]) {
             setReceiptImage({
                 uri: result.assets[0].uri,
@@ -195,18 +249,15 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
 
     async function pickReceiptFromGallery() {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
         if (!permission.granted) {
-            Alert.alert('Permissao necessaria', 'Autorize o acesso a galeria para anexar o recibo.');
+            Alert.alert('Permissão necessária', 'Autorize o acesso à galeria para anexar o recibo.');
             return;
         }
-
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
             quality: 0.8,
         });
-
         if (!result.canceled && result.assets[0]) {
             setReceiptImage({
                 uri: result.assets[0].uri,
@@ -216,25 +267,149 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
     }
 
     function handleChooseReceiptImage() {
-        Alert.alert('Adicionar comprovante', 'Escolha como deseja anexar a nota fiscal ou recibo.', [
-            {
-                text: 'Camera',
-                onPress: pickReceiptFromCamera,
-            },
-            {
-                text: 'Galeria',
-                onPress: pickReceiptFromGallery,
-            },
-            {
-                text: 'Cancelar',
-                style: 'cancel',
-            },
-        ]);
+        if (Platform.OS === 'web') {
+            pickReceiptFromGallery();
+        } else {
+            Alert.alert('Adicionar comprovante', 'Escolha como deseja anexar o recibo.', [
+                { text: 'Câmera', onPress: pickReceiptFromCamera },
+                { text: 'Galeria', onPress: pickReceiptFromGallery },
+                { text: 'Cancelar', style: 'cancel' },
+            ]);
+        }
     }
 
+    // Upload Image to Supabase Storage
+    async function uploadReceiptImage(uri: string): Promise<string | null> {
+        try {
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            
+            const fileExt = uri.split('.').pop() || 'jpg';
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+            const filePath = `receipts/${fileName}`;
+
+            // Upload
+            const { data, error } = await supabase.storage
+                .from('receipts')
+                .upload(filePath, blob, {
+                    contentType: 'image/jpeg'
+                });
+
+            if (error) throw error;
+
+            // Get Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('receipts')
+                .getPublicUrl(filePath);
+
+            return publicUrl;
+        } catch (err: any) {
+            console.error("Erro no upload do comprovante:", err);
+            return null;
+        }
+    }
+
+    // Modal Actions
+    function handleAddExpense() {
+        setExpenseTitle('');
+        setExpenseValue('');
+        setSelectedPayerId(currentUser.id);
+        setReceiptImage(null);
+        setIsExpenseModalVisible(true);
+        Animated.timing(modalTranslateY, {
+            toValue: 0,
+            duration: 260,
+            useNativeDriver: true,
+        }).start();
+    }
+
+    function handleCloseExpenseModal() {
+        if (expenseSaving) return;
+        Animated.timing(modalTranslateY, {
+            toValue: 450,
+            duration: 220,
+            useNativeDriver: true,
+        }).start(() => {
+            setIsExpenseModalVisible(false);
+            setReceiptImage(null);
+        });
+    }
+
+    async function handleExpenseSubmit() {
+        if (!expenseTitle.trim()) {
+            Alert.alert("Erro", "Por favor, informe a descrição da despesa.");
+            return;
+        }
+
+        const normalizedVal = expenseValue.replace(',', '.');
+        const parsedVal = Number(normalizedVal);
+        if (!parsedVal || parsedVal <= 0) {
+            Alert.alert("Erro", "Por favor, informe um valor de despesa válido.");
+            return;
+        }
+
+        setExpenseSaving(true);
+        try {
+            let receiptUrl = null;
+            if (receiptImage) {
+                receiptUrl = await uploadReceiptImage(receiptImage.uri);
+                if (!receiptUrl) {
+                    const saveWithoutReceipt = await new Promise((resolve) => {
+                        if (Platform.OS === 'web') {
+                            const confirmSave = window.confirm("Erro de Upload: Não foi possível enviar o recibo. Deseja salvar a despesa assim mesmo?");
+                            resolve(confirmSave);
+                        } else {
+                            Alert.alert(
+                                "Erro de Upload",
+                                "Não foi possível enviar o recibo. Deseja salvar a despesa assim mesmo?",
+                                [
+                                    { text: "Cancelar", onPress: () => resolve(false), style: "cancel" },
+                                    { text: "Sim, salvar sem recibo", onPress: () => resolve(true) }
+                                ]
+                            );
+                        }
+                    });
+                    if (!saveWithoutReceipt) {
+                        setExpenseSaving(false);
+                        return;
+                    }
+                }
+            }
+
+            // Insert Expense
+            const { error } = await supabase
+                .from('expenses')
+                .insert({
+                    group_id: group.id,
+                    paid_by: selectedPayerId,
+                    valor: parsedVal,
+                    descricao: expenseTitle.trim(),
+                    receipt_url: receiptUrl
+                });
+
+            if (error) throw error;
+
+            handleCloseExpenseModal();
+            loadGroupData();
+            refreshConsolidatedBalance();
+        } catch (err: any) {
+            console.error("Erro ao salvar despesa:", err);
+            Alert.alert("Erro", "Ocorreu um erro ao salvar a despesa.");
+        } finally {
+            setExpenseSaving(false);
+        }
+    }
+
+    // Payment/Settle Flow
     function handleOpenPaymentModal() {
         setPaymentValue('');
         setPaymentError('');
+        const otherMembers = members.filter(m => m.user_id !== currentUser.id);
+        if (otherMembers.length > 0) {
+            setSelectedReceiverId(otherMembers[0].user_id);
+        } else {
+            setSelectedReceiverId('');
+        }
         setIsPaymentModalVisible(true);
         Animated.timing(paymentModalTranslateY, {
             toValue: 0,
@@ -244,6 +419,7 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
     }
 
     function handleClosePaymentModal() {
+        if (paymentSaving) return;
         Animated.timing(paymentModalTranslateY, {
             toValue: 360,
             duration: 220,
@@ -254,23 +430,62 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
         });
     }
 
-    function handlePaymentSubmit() {
+    async function handlePaymentSubmit() {
         const normalizedValue = paymentValue.replace(',', '.');
         const paidValue = Number(normalizedValue);
 
         if (!paidValue || paidValue <= 0) {
-            setPaymentError('Informe um valor válido para pagar.');
+            setPaymentError('Informe um valor válido.');
             return;
         }
 
-        if (paidValue > dividaAtual) {
-            setPaymentError('O valor pago não pode ser maior que o saldo devedor.');
+        if (!selectedReceiverId) {
+            setPaymentError('Selecione quem recebeu o pagamento.');
             return;
         }
 
-        handleClosePaymentModal();
+        const maxOwed = myBalance < 0 ? Math.abs(myBalance) : 0;
+        if (maxOwed > 0 && paidValue > maxOwed + 0.01) {
+            setPaymentError(`Você deve no máximo R$ ${maxOwed.toFixed(2)}.`);
+            return;
+        }
+
+        setPaymentSaving(true);
+        try {
+            // Settle payment is recorded as an expense with special description containing the receiver ID
+            const { error } = await supabase
+                .from('expenses')
+                .insert({
+                    group_id: group.id,
+                    paid_by: currentUser.id,
+                    valor: paidValue,
+                    descricao: `Liquidação: para ${selectedReceiverId}`,
+                    receipt_url: null
+                });
+
+            if (error) throw error;
+
+            handleClosePaymentModal();
+            loadGroupData();
+            refreshConsolidatedBalance();
+            if (Platform.OS === 'web') {
+                window.alert("Pagamento de liquidação registrado com sucesso!");
+            } else {
+                Alert.alert("Sucesso", "Pagamento de liquidação registrado com sucesso!");
+            }
+        } catch (err: any) {
+            console.error("Erro ao registrar liquidação:", err);
+            if (Platform.OS === 'web') {
+                window.alert("Não foi possível registrar o pagamento.");
+            } else {
+                Alert.alert("Erro", "Não foi possível registrar o pagamento.");
+            }
+        } finally {
+            setPaymentSaving(false);
+        }
     }
 
+    // History Modal
     function handleOpenHistoryModal() {
         setIsHistoryModalVisible(true);
         Animated.timing(historyModalTranslateY, {
@@ -288,6 +503,7 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
         }).start(() => setIsHistoryModalVisible(false));
     }
 
+    // Share / Invite Modal
     function handleOpenInviteModal() {
         setIsInviteModalVisible(true);
         Animated.timing(inviteModalTranslateY, {
@@ -306,9 +522,27 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
     }
 
     async function handleShareInvite() {
-        await Share.share({
-            message: `Entre no grupo "${groupName}" no FechaConta usando o código ${groupCode}.`,
+        try {
+            await Share.share({
+                message: `Entre no meu grupo "${group.title}" no FechaConta usando o código de convite abaixo:\n\n${group.id}\n\nAbra o app e insira o código em "Entrar em grupo".`,
+            });
+        } catch (err) {
+            console.error("Erro ao compartilhar convite:", err);
+        }
+    }
+
+    function formatDate(dateString: string) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit'
         });
+    }
+
+    if (loading) {
+        return <Loading />;
     }
 
     return (
@@ -316,6 +550,9 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
             style={styles.container}
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            }
         >
             <View style={styles.inner}>
                 <View style={styles.header}>
@@ -324,51 +561,65 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                     </TouchableOpacity>
 
                     <View style={styles.headerText}>
-                        <Text style={styles.sectionTitle}>{group?.title ?? 'Detalhes do grupo'}</Text>
-                        <Text style={styles.sectionSubtitle}>{group?.participants ?? 0} participantes</Text>
+                        <Text style={styles.sectionTitle}>{group.title}</Text>
+                        <Text style={styles.sectionSubtitle}>{numberOfMembers} participantes</Text>
                     </View>
                 </View>
 
+                {/* Horizontal Member list with Balances */}
                 <FlatList
-                    data={friends}
+                    data={calculatedBalances}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.memberList}
+                    ListHeaderComponent={
+                        <View style={styles.memberItem}>
+                            <TouchableOpacity style={styles.addButton} onPress={handleOpenInviteModal}>
+                                <UserPlus size={26} color="#111" />
+                            </TouchableOpacity>
+                            <Text style={styles.memberName}>Convidar</Text>
+                            <Text style={styles.memberBalanceLabel}>-</Text>
+                        </View>
+                    }
                     renderItem={({ item }) => (
                         <View style={styles.memberItem}>
-                            {item.add ? (
-                                <TouchableOpacity style={styles.addButton} onPress={handleOpenInviteModal}>
-                                    <UserPlus size={26} color="#111" />
-                                </TouchableOpacity>
-                            ) : (
-                                <ImageBackground
-                                    source={{ uri: item.image }}
-                                    style={styles.img}
-                                    imageStyle={styles.avatar}
-                                />
-                            )}
-                        <Text style={styles.memberName}>{item.name}</Text>
-                    </View>
-                )}
-            />
+                            <Image
+                                source={{ uri: item.avatar }}
+                                style={styles.avatar}
+                            />
+                            <Text style={styles.memberName} numberOfLines={1}>{item.name.split(' ')[0]}</Text>
+                            <Text style={[
+                                styles.memberBalance,
+                                item.balance > 0 ? styles.balancePositive : item.balance < 0 ? styles.balanceNegative : styles.balanceZero
+                            ]}>
+                                {item.balance > 0 ? `+${item.balance.toFixed(0)}` : item.balance < 0 ? `${item.balance.toFixed(0)}` : 'R$0'}
+                            </Text>
+                        </View>
+                    )}
+                />
 
-                <View style={[styles.balanceCard, { backgroundColor: group?.color ?? '#f4f4f4' }]}>
-                    <Text style={styles.label}>Saldo da dívida</Text>
-
-                    <Text style={styles.value}>R$ {totalDivida.toFixed(2)}</Text>
+                {/* Dashboard / Balance Card */}
+                <View style={[styles.balanceCard, { backgroundColor: group.color }]}>
+                    <Text style={styles.label}>Total do Racha</Text>
+                    <Text style={styles.value}>R$ {totalExpenses.toFixed(2)}</Text>
 
                     <View style={styles.infoContainer}>
                         <View style={styles.infoBox}>
-                            <Text style={styles.infoLabel}>Dívida atual</Text>
-                            <Text style={styles.infoValue}>R$ {dividaAtual.toFixed(2)}</Text>
+                            <Text style={styles.infoLabel}>Meu Saldo</Text>
+                            <Text style={[
+                                styles.infoValue,
+                                myBalance > 0 ? styles.textPositive : myBalance < 0 ? styles.textNegative : null
+                            ]}>
+                                {myBalance > 0 ? `A Receber: R$ ${myBalance.toFixed(2)}` : myBalance < 0 ? `A Pagar: R$ ${Math.abs(myBalance).toFixed(2)}` : 'Em dia'}
+                            </Text>
                         </View>
 
                         <View style={styles.divider} />
 
                         <View style={styles.infoBox}>
-                            <Text style={styles.infoLabel}>Total pago</Text>
-                            <Text style={styles.infoValue}>R$ {totalPago.toFixed(2)}</Text>
+                            <Text style={styles.infoLabel}>Eu paguei</Text>
+                            <Text style={styles.infoValue}>R$ {myPaid.toFixed(2)}</Text>
                         </View>
                     </View>
 
@@ -377,14 +628,18 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                             <View style={styles.actionButton}>
                                 <Plus size={22} color="#222" />
                             </View>
-                            <Text style={styles.actionText}>Adicionar</Text>
+                            <Text style={styles.actionText}>Despesa</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.actionItem} onPress={handleOpenPaymentModal}>
-                            <View style={styles.actionButton}>
-                                <DollarSign size={22} color="#222" />
+                        <TouchableOpacity 
+                            style={styles.actionItem} 
+                            onPress={handleOpenPaymentModal}
+                            disabled={myBalance >= 0}
+                        >
+                            <View style={[styles.actionButton, myBalance >= 0 ? styles.actionButtonDisabled : null]}>
+                                <DollarSign size={22} color={myBalance >= 0 ? "#9ca3af" : "#222"} />
                             </View>
-                            <Text style={styles.actionText}>Pagar</Text>
+                            <Text style={[styles.actionText, myBalance >= 0 ? styles.actionTextDisabled : null]}>Pagar</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity style={styles.actionItem} onPress={handleOpenHistoryModal}>
@@ -396,28 +651,39 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                     </View>
                 </View>
 
+                {/* History list */}
                 <View style={styles.expensesHeader}>
                     <Text style={styles.expensesTitle}>Últimas despesas</Text>
                     <ReceiptText size={22} color="#112332" />
                 </View>
 
-                <FlatList
-                    data={expenses}
-                    keyExtractor={(item) => item.id}
-                    scrollEnabled={false}
-                    contentContainerStyle={styles.expenseList}
-                    renderItem={({ item }) => (
-                        <View style={styles.expenseCard}>
-                            <View>
-                                <Text style={styles.expenseTitle}>{item.title}</Text>
-                                <Text style={styles.expenseAuthor}>Adicionado por {item.author}</Text>
-                            </View>
-                            <Text style={styles.expenseValue}>R$ {item.value.toFixed(2)}</Text>
-                        </View>
-                    )}
-                />
+                {expenses.length === 0 ? (
+                    <View style={styles.emptyExpenses}>
+                        <Text style={styles.emptyExpensesText}>Nenhuma despesa registrada ainda.</Text>
+                    </View>
+                ) : (
+                    <FlatList
+                        data={expenses.slice(0, 5)}
+                        keyExtractor={(item) => item.id}
+                        scrollEnabled={false}
+                        contentContainerStyle={styles.expenseList}
+                        renderItem={({ item }) => (
+                            <ExpenseCard
+                                title={item.descricao}
+                                author={item.users?.nome || 'Membro'}
+                                value={item.valor}
+                                date={formatDate(item.created_at)}
+                                receiptUrl={item.receipt_url}
+                                onPressReceipt={item.receipt_url ? () => {
+                                    Alert.alert("Comprovante do Racha", `Link: ${item.receipt_url}`);
+                                } : undefined}
+                            />
+                        )}
+                    />
+                )}
             </View>
 
+            {/* Modal: Adicionar Despesa */}
             <Modal
                 transparent
                 visible={isExpenseModalVisible}
@@ -441,74 +707,122 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
 
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Adicionar despesa</Text>
-                            <TouchableOpacity style={styles.closeButton} onPress={handleCloseExpenseModal}>
+                            <TouchableOpacity style={styles.closeButton} onPress={handleCloseExpenseModal} disabled={expenseSaving}>
                                 <X size={22} color="#112332" />
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.modalForm}>
-                            <View>
-                                <Text style={styles.modalLabel}>Título</Text>
-                                <TextInput placeholder="Ex: Mercado" style={styles.modalInput} />
-                            </View>
+                        <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+                            <View style={styles.modalForm}>
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.modalLabel}>Título / Descrição</Text>
+                                    <TextInput 
+                                        placeholder="Ex: Supermercado, Bebidas, Gasolina..." 
+                                        style={styles.modalInput} 
+                                        value={expenseTitle}
+                                        onChangeText={setExpenseTitle}
+                                        editable={!expenseSaving}
+                                        placeholderTextColor="#9ca3af"
+                                    />
+                                </View>
 
-                            <View>
-                                <Text style={styles.modalLabel}>Valor</Text>
-                                <TextInput
-                                    placeholder="R$ 0,00"
-                                    keyboardType="decimal-pad"
-                                    style={styles.modalInput}
-                                />
-                            </View>
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.modalLabel}>Valor (R$)</Text>
+                                    <TextInput
+                                        placeholder="R$ 0,00"
+                                        keyboardType="decimal-pad"
+                                        style={styles.modalInput}
+                                        value={expenseValue}
+                                        onChangeText={setExpenseValue}
+                                        editable={!expenseSaving}
+                                        placeholderTextColor="#9ca3af"
+                                    />
+                                </View>
 
-                            <View>
-                                <Text style={styles.modalLabel}>Pago por</Text>
-                                <TextInput placeholder="Nome do participante" style={styles.modalInput} />
-                            </View>
-
-                            <View>
-                                <Text style={styles.modalLabel}>Comprovante</Text>
-                                {receiptImage ? (
-                                    <View style={styles.receiptPreviewCard}>
-                                        <Image source={{ uri: receiptImage.uri }} style={styles.receiptPreview} />
-                                        <View style={styles.receiptPreviewInfo}>
-                                            <Text style={styles.receiptPreviewTitle}>Recibo anexado</Text>
-                                            <Text style={styles.receiptPreviewName} numberOfLines={1}>
-                                                {receiptImage.fileName ?? 'Imagem selecionada'}
-                                            </Text>
-                                        </View>
-                                        <TouchableOpacity
-                                            style={styles.removeReceiptButton}
-                                            onPress={() => setReceiptImage(null)}
-                                        >
-                                            <Trash2 size={18} color="#e5484d" />
-                                        </TouchableOpacity>
-                                    </View>
-                                ) : (
-                                    <TouchableOpacity
-                                        style={styles.receiptPickerButton}
-                                        onPress={handleChooseReceiptImage}
+                                {/* Select Member Dropdown (Custom Drawer) */}
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.modalLabel}>Pago por</Text>
+                                    <ScrollView 
+                                        horizontal 
+                                        showsHorizontalScrollIndicator={false}
+                                        contentContainerStyle={styles.payerList}
                                     >
-                                        <View style={styles.receiptPickerIcon}>
-                                            <Camera size={22} color="#112332" />
-                                        </View>
-                                        <View style={styles.receiptPickerText}>
-                                            <Text style={styles.receiptPickerTitle}>Adicionar foto do recibo</Text>
-                                            <Text style={styles.receiptPickerHint}>Tire uma foto ou escolha da galeria</Text>
-                                        </View>
-                                        <ImageIcon size={22} color="#65717c" />
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                        </View>
+                                        {members.map((m) => (
+                                            <TouchableOpacity
+                                                key={m.user_id}
+                                                style={[
+                                                    styles.payerItem,
+                                                    selectedPayerId === m.user_id && styles.payerItemSelected
+                                                ]}
+                                                onPress={() => setSelectedPayerId(m.user_id)}
+                                                disabled={expenseSaving}
+                                            >
+                                                <Text style={[
+                                                    styles.payerText,
+                                                    selectedPayerId === m.user_id && styles.payerTextSelected
+                                                ]}>
+                                                    {m.users?.nome || 'Membro'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+                                </View>
 
-                        <TouchableOpacity style={styles.saveButton} onPress={handleCloseExpenseModal}>
-                            <Text style={styles.saveButtonText}>Salvar despesa</Text>
-                        </TouchableOpacity>
+                                <View style={styles.formGroup}>
+                                    <Text style={styles.modalLabel}>Comprovante</Text>
+                                    {receiptImage ? (
+                                        <View style={styles.receiptPreviewCard}>
+                                            <Image source={{ uri: receiptImage.uri }} style={styles.receiptPreview} />
+                                            <View style={styles.receiptPreviewInfo}>
+                                                <Text style={styles.receiptPreviewTitle}>Recibo anexado</Text>
+                                                <Text style={styles.receiptPreviewName} numberOfLines={1}>
+                                                    {receiptImage.fileName ?? 'Imagem selecionada'}
+                                                </Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                style={styles.removeReceiptButton}
+                                                onPress={() => setReceiptImage(null)}
+                                                disabled={expenseSaving}
+                                            >
+                                                <Trash2 size={18} color="#e5484d" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ) : (
+                                        <TouchableOpacity
+                                            style={styles.receiptPickerButton}
+                                            onPress={handleChooseReceiptImage}
+                                            disabled={expenseSaving}
+                                        >
+                                            <View style={styles.receiptPickerIcon}>
+                                                <Camera size={22} color="#112332" />
+                                            </View>
+                                            <View style={styles.receiptPickerText}>
+                                                <Text style={styles.receiptPickerTitle}>Adicionar foto do recibo</Text>
+                                                <Text style={styles.receiptPickerHint}>Tire uma foto ou escolha da galeria</Text>
+                                            </View>
+                                            <ImageIcon size={22} color="#65717c" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                            </View>
+
+                            <TouchableOpacity 
+                                style={styles.saveButton} 
+                                onPress={handleExpenseSubmit}
+                                disabled={expenseSaving}
+                            >
+                                {expenseSaving ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.saveButtonText}>Salvar despesa</Text>
+                                )}
+                            </TouchableOpacity>
+                        </ScrollView>
                     </Animated.View>
                 </View>
             </Modal>
 
+            {/* Modal: Pagar Dívida (Liquidação) */}
             <Modal
                 transparent
                 visible={isPaymentModalVisible}
@@ -531,54 +845,98 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                         <View style={styles.modalHandle} />
 
                         <View style={styles.modalHeader}>
-                            <View>
+                            <View style={{ flex: 1 }}>
                                 <Text style={styles.modalTitle}>Pagar dívida</Text>
                                 <Text style={styles.modalSubtitle}>
-                                    Saldo devedor: R$ {dividaAtual.toFixed(2)}
+                                    Saldo devedor: R$ {Math.abs(myBalance).toFixed(2)}
                                 </Text>
                             </View>
-                            <TouchableOpacity style={styles.closeButton} onPress={handleClosePaymentModal}>
+                            <TouchableOpacity style={styles.closeButton} onPress={handleClosePaymentModal} disabled={paymentSaving}>
                                 <X size={22} color="#112332" />
                             </TouchableOpacity>
                         </View>
 
                         <View style={styles.modalForm}>
-                            <View>
-                                <Text style={styles.modalLabel}>Valor pago</Text>
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Valor pago (R$)</Text>
                                 <TextInput
                                     placeholder="R$ 0,00"
                                     keyboardType="decimal-pad"
                                     value={paymentValue}
                                     onChangeText={(value) => {
                                         setPaymentValue(value);
-                                        if (paymentError) {
-                                            setPaymentError('');
-                                        }
+                                        if (paymentError) setPaymentError('');
                                     }}
+                                    editable={!paymentSaving}
                                     style={[
                                         styles.modalInput,
                                         paymentError ? styles.modalInputError : null,
                                     ]}
+                                    placeholderTextColor="#9ca3af"
                                 />
                                 {paymentError ? (
                                     <Text style={styles.errorText}>{paymentError}</Text>
                                 ) : null}
                             </View>
+
+                            {/* Pago para */}
+                            <View style={styles.formGroup}>
+                                <Text style={styles.modalLabel}>Pagar para</Text>
+                                <ScrollView 
+                                    horizontal 
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.payerList}
+                                >
+                                    {members
+                                        .filter(m => m.user_id !== currentUser.id)
+                                        .map((m) => (
+                                            <TouchableOpacity
+                                                key={m.user_id}
+                                                style={[
+                                                    styles.payerItem,
+                                                    selectedReceiverId === m.user_id && styles.payerItemSelected
+                                                ]}
+                                                onPress={() => setSelectedReceiverId(m.user_id)}
+                                                disabled={paymentSaving}
+                                            >
+                                                <Text style={[
+                                                    styles.payerText,
+                                                    selectedReceiverId === m.user_id && styles.payerTextSelected
+                                                ]}>
+                                                    {m.users?.nome || 'Membro'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                </ScrollView>
+                            </View>
                         </View>
 
                         <View style={styles.paymentActions}>
-                            <TouchableOpacity style={styles.cancelButton} onPress={handleClosePaymentModal}>
+                            <TouchableOpacity 
+                                style={styles.cancelButton} 
+                                onPress={handleClosePaymentModal}
+                                disabled={paymentSaving}
+                            >
                                 <Text style={styles.cancelButtonText}>Cancelar</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.payButton} onPress={handlePaymentSubmit}>
-                                <Text style={styles.payButtonText}>Pagar</Text>
+                            <TouchableOpacity 
+                                style={styles.payButton} 
+                                onPress={handlePaymentSubmit}
+                                disabled={paymentSaving}
+                            >
+                                {paymentSaving ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.payButtonText}>Registrar</Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                     </Animated.View>
                 </View>
             </Modal>
 
+            {/* Modal: Histórico Completo de Despesas */}
             <Modal
                 transparent
                 visible={isHistoryModalVisible}
@@ -601,10 +959,10 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                         <View style={styles.modalHandle} />
 
                         <View style={styles.modalHeader}>
-                            <View>
+                            <View style={{ flex: 1 }}>
                                 <Text style={styles.modalTitle}>Histórico</Text>
                                 <Text style={styles.modalSubtitle}>
-                                    Movimentações recentes do grupo
+                                    Todas as despesas ocorridas no grupo
                                 </Text>
                             </View>
                             <TouchableOpacity style={styles.closeButton} onPress={handleCloseHistoryModal}>
@@ -613,50 +971,28 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                         </View>
 
                         <FlatList
-                            data={historyItems}
+                            data={expenses}
                             keyExtractor={(item) => item.id}
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={styles.historyList}
                             renderItem={({ item }) => (
-                                <View style={styles.historyItem}>
-                                    <View
-                                        style={[
-                                            styles.historyBadge,
-                                            item.type === 'payment'
-                                                ? styles.historyBadgePayment
-                                                : styles.historyBadgeExpense,
-                                        ]}
-                                    >
-                                        {item.type === 'payment' ? (
-                                            <DollarSign size={18} color="#112332" />
-                                        ) : (
-                                            <ReceiptText size={18} color="#112332" />
-                                        )}
-                                    </View>
-
-                                    <View style={styles.historyContent}>
-                                        <Text style={styles.historyTitle}>{item.title}</Text>
-                                        <Text style={styles.historyDescription}>{item.description}</Text>
-                                        <Text style={styles.historyDate}>{item.date}</Text>
-                                    </View>
-
-                                    <Text
-                                        style={[
-                                            styles.historyValue,
-                                            item.type === 'payment'
-                                                ? styles.historyValuePayment
-                                                : styles.historyValueExpense,
-                                        ]}
-                                    >
-                                        {item.type === 'payment' ? '-' : '+'} R$ {item.value.toFixed(2)}
-                                    </Text>
-                                </View>
+                                <ExpenseCard
+                                    title={item.descricao}
+                                    author={item.users?.nome || 'Membro'}
+                                    value={item.valor}
+                                    date={formatDate(item.created_at)}
+                                    receiptUrl={item.receipt_url}
+                                    onPressReceipt={item.receipt_url ? () => {
+                                        Alert.alert("Comprovante do Racha", `Link: ${item.receipt_url}`);
+                                    } : undefined}
+                                />
                             )}
                         />
                     </Animated.View>
                 </View>
             </Modal>
 
+            {/* Modal: Convidar Amigos */}
             <Modal
                 transparent
                 visible={isInviteModalVisible}
@@ -679,7 +1015,7 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                         <View style={styles.modalHandle} />
 
                         <View style={styles.modalHeader}>
-                            <View>
+                            <View style={{ flex: 1 }}>
                                 <Text style={styles.modalTitle}>Convidar Amigo</Text>
                                 <Text style={styles.modalSubtitle}>
                                     Compartilhe o código de acesso do grupo
@@ -691,10 +1027,10 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                         </View>
 
                         <View style={styles.inviteCodeCard}>
-                            <Text style={styles.inviteCodeLabel}>Código do grupo</Text>
-                            <Text style={styles.inviteCode}>{groupCode}</Text>
+                            <Text style={styles.inviteCodeLabel}>Código do grupo (UUID)</Text>
+                            <Text style={styles.inviteCode} selectable={true}>{group.id}</Text>
                             <Text style={styles.inviteCodeHint}>
-                                Envie este código para a pessoa entrar no grupo.
+                                Qualquer usuário autenticado no FechaConta pode entrar no grupo colando esse código.
                             </Text>
                         </View>
 
@@ -721,17 +1057,17 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
     },
     content: {
-        paddingBottom: 120,
+        paddingBottom: 100,
     },
     inner: {
-        gap: 8,
-        paddingHorizontal: 23,
+        paddingHorizontal: 24,
         paddingTop: 54,
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 14,
+        marginBottom: 20,
     },
     backButton: {
         width: 42,
@@ -746,7 +1082,7 @@ const styles = StyleSheet.create({
     },
     sectionTitle: {
         fontFamily: 'Inter_700Bold',
-        fontSize: 20,
+        fontSize: 22,
         color: '#112332',
     },
     sectionSubtitle: {
@@ -754,91 +1090,89 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#65717c',
     },
-    img: {
-        width: 60,
-        height: 60,
+    avatar: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
     },
     memberList: {
-        paddingVertical: 15,
+        paddingVertical: 12,
         gap: 12,
-        paddingLeft: 5,
+        marginBottom: 16,
     },
     memberItem: {
         width: 72,
         alignItems: 'center',
-        gap: 7,
-    },
-    avatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        gap: 4,
     },
     addButton: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        width: 50,
+        height: 50,
+        borderRadius: 25,
         backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 5,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
     },
     memberName: {
-        fontSize: 12,
+        fontSize: 11,
+        fontWeight: '600',
         color: '#4c5863',
         textAlign: 'center',
+        width: '100%',
     },
-    inviteButton: {
-        minHeight: 52,
-        borderRadius: 26,
-        backgroundColor: '#112332',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        marginBottom: 10,
+    memberBalanceLabel: {
+        fontSize: 10,
+        color: '#9ca3af',
     },
-    inviteButtonText: {
-        color: '#fff',
-        fontSize: 15,
-        fontWeight: '800',
+    memberBalance: {
+        fontSize: 10,
+        fontWeight: '700',
+    },
+    balancePositive: {
+        color: '#16a34a',
+    },
+    balanceNegative: {
+        color: '#dc2626',
+    },
+    balanceZero: {
+        color: '#6b7280',
     },
     balanceCard: {
         width: '100%',
         borderRadius: 28,
         padding: 24,
         shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.1,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
         shadowRadius: 10,
-        elevation: 6,
+        elevation: 4,
+        marginBottom: 28,
     },
     label: {
-        fontSize: 15,
-        color: '#333',
-        marginBottom: 10,
+        fontSize: 14,
+        color: '#374151',
+        fontWeight: '600',
     },
     value: {
-        fontSize: 42,
+        fontSize: 38,
         fontWeight: 'bold',
         color: '#111',
+        marginTop: 6,
     },
     infoContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: 24,
-        backgroundColor: '#fff',
+        marginTop: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.7)',
         borderRadius: 18,
-        padding: 16,
+        padding: 14,
     },
     infoBox: {
         flex: 1,
@@ -846,78 +1180,81 @@ const styles = StyleSheet.create({
     },
     divider: {
         width: 1,
-        backgroundColor: '#ddd',
+        backgroundColor: 'rgba(0, 0, 0, 0.1)',
         marginHorizontal: 10,
     },
     infoLabel: {
-        fontSize: 13,
-        color: '#777',
-        marginBottom: 6,
+        fontSize: 12,
+        color: '#4b5563',
+        fontWeight: '600',
     },
     infoValue: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#111',
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#111827',
+        marginTop: 4,
+    },
+    textPositive: {
+        color: '#16a34a',
+    },
+    textNegative: {
+        color: '#dc2626',
     },
     actions: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        marginTop: 28,
+        marginTop: 24,
     },
     actionItem: {
         alignItems: 'center',
-        gap: 10,
+        gap: 6,
     },
     actionButton: {
-        width: 58,
-        height: 58,
-        borderRadius: 29,
-        backgroundColor: 'rgba(255,255,255,0.72)',
+        width: 52,
+        height: 52,
+        borderRadius: 26,
+        backgroundColor: '#fff',
         justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    actionButtonDisabled: {
+        backgroundColor: '#f3f4f6',
+        borderColor: '#e5e7eb',
     },
     actionText: {
-        fontSize: 12,
-        color: '#333',
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#1f2937',
+    },
+    actionTextDisabled: {
+        color: '#9ca3af',
     },
     expensesHeader: {
-        marginTop: 18,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        marginBottom: 16,
     },
     expensesTitle: {
         fontFamily: 'Inter_700Bold',
-        fontSize: 22,
+        fontSize: 18,
         color: '#112332',
+    },
+    emptyExpenses: {
+        paddingVertical: 24,
+        alignItems: 'center',
+    },
+    emptyExpensesText: {
+        color: '#9ca3af',
+        fontSize: 14,
     },
     expenseList: {
-        gap: 12,
-        paddingTop: 12,
-    },
-    expenseCard: {
-        minHeight: 76,
-        borderRadius: 18,
-        padding: 16,
-        backgroundColor: '#f5f7f9',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    expenseTitle: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#112332',
-    },
-    expenseAuthor: {
-        marginTop: 4,
-        fontSize: 13,
-        color: '#65717c',
-    },
-    expenseValue: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#111',
+        paddingBottom: 20,
     },
     modalOverlay: {
         flex: 1,
@@ -925,166 +1262,21 @@ const styles = StyleSheet.create({
     },
     modalBackdrop: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.35)',
+        backgroundColor: 'rgba(0,0,0,0.45)',
     },
     expenseModal: {
         width: '100%',
+        maxHeight: '90%',
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         paddingHorizontal: 24,
         paddingTop: 12,
-        paddingBottom: 34,
         backgroundColor: '#fff',
         shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: -6,
-        },
-        shadowOpacity: 0.14,
-        shadowRadius: 16,
-        elevation: 12,
-    },
-    modalHandle: {
-        alignSelf: 'center',
-        width: 46,
-        height: 5,
-        borderRadius: 999,
-        backgroundColor: '#d8e0e8',
-        marginBottom: 20,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 22,
-    },
-    modalTitle: {
-        fontFamily: 'Inter_700Bold',
-        fontSize: 28,
-        color: '#112332',
-    },
-    modalSubtitle: {
-        marginTop: 4,
-        fontSize: 14,
-        color: '#65717c',
-    },
-    closeButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: '#f1f5f9',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    modalForm: {
-        gap: 16,
-        marginBottom: 24,
-    },
-    modalLabel: {
-        fontSize: 15,
-        fontWeight: '700',
-        marginBottom: 10,
-        color: '#112332',
-    },
-    modalInput: {
-        borderWidth: 1,
-        borderColor: '#d8e0e8',
-        borderRadius: 12,
-        padding: 15,
-        fontSize: 16,
-        backgroundColor: '#f8fafc',
-    },
-    receiptPickerButton: {
-        minHeight: 84,
-        borderWidth: 1,
-        borderColor: '#d8e0e8',
-        borderRadius: 16,
-        padding: 14,
-        backgroundColor: '#f8fafc',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    receiptPickerIcon: {
-        width: 46,
-        height: 46,
-        borderRadius: 23,
-        backgroundColor: '#eef2f6',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    receiptPickerText: {
-        flex: 1,
-    },
-    receiptPickerTitle: {
-        fontSize: 15,
-        fontWeight: '800',
-        color: '#112332',
-    },
-    receiptPickerHint: {
-        marginTop: 4,
-        fontSize: 13,
-        color: '#65717c',
-    },
-    receiptPreviewCard: {
-        minHeight: 86,
-        borderWidth: 1,
-        borderColor: '#d8e0e8',
-        borderRadius: 16,
-        padding: 10,
-        backgroundColor: '#f8fafc',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    receiptPreview: {
-        width: 66,
-        height: 66,
-        borderRadius: 12,
-        backgroundColor: '#eef2f6',
-    },
-    receiptPreviewInfo: {
-        flex: 1,
-    },
-    receiptPreviewTitle: {
-        fontSize: 15,
-        fontWeight: '800',
-        color: '#112332',
-    },
-    receiptPreviewName: {
-        marginTop: 4,
-        fontSize: 13,
-        color: '#65717c',
-    },
-    removeReceiptButton: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
-        backgroundColor: '#fff1f1',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    modalInputError: {
-        borderColor: '#e5484d',
-        backgroundColor: '#fff7f7',
-    },
-    errorText: {
-        marginTop: 8,
-        fontSize: 13,
-        color: '#e5484d',
-        fontWeight: '700',
-    },
-    saveButton: {
-        minHeight: 58,
-        borderRadius: 29,
-        backgroundColor: '#000',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    saveButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '800',
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 10,
     },
     paymentModal: {
         width: '100%',
@@ -1094,44 +1286,15 @@ const styles = StyleSheet.create({
         paddingTop: 12,
         paddingBottom: 34,
         backgroundColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: -6,
-        },
-        shadowOpacity: 0.14,
-        shadowRadius: 16,
-        elevation: 12,
     },
-    paymentActions: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    cancelButton: {
-        flex: 1,
-        minHeight: 56,
-        borderRadius: 28,
-        backgroundColor: '#eef2f6',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    cancelButtonText: {
-        color: '#112332',
-        fontSize: 16,
-        fontWeight: '800',
-    },
-    payButton: {
-        flex: 1,
-        minHeight: 56,
-        borderRadius: 28,
-        backgroundColor: '#000',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    payButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '800',
+    historyModal: {
+        width: '100%',
+        height: '80%',
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
+        paddingHorizontal: 24,
+        paddingTop: 12,
+        backgroundColor: '#fff',
     },
     inviteModal: {
         width: '100%',
@@ -1141,40 +1304,243 @@ const styles = StyleSheet.create({
         paddingTop: 12,
         paddingBottom: 34,
         backgroundColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: -6,
-        },
-        shadowOpacity: 0.14,
-        shadowRadius: 16,
-        elevation: 12,
     },
-    inviteCodeCard: {
-        borderRadius: 24,
-        padding: 22,
-        backgroundColor: '#f5f7f9',
+    modalHandle: {
+        alignSelf: 'center',
+        width: 40,
+        height: 5,
+        borderRadius: 999,
+        backgroundColor: '#e2e8f0',
+        marginBottom: 20,
+    },
+    modalHeader: {
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
         marginBottom: 22,
     },
-    inviteCodeLabel: {
+    modalTitle: {
+        fontFamily: 'Inter_700Bold',
+        fontSize: 24,
+        color: '#112332',
+    },
+    modalSubtitle: {
+        marginTop: 4,
         fontSize: 13,
         color: '#65717c',
+    },
+    closeButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#f1f5f9',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalForm: {
+        gap: 16,
+        marginBottom: 24,
+    },
+    formGroup: {
+        width: '100%',
+    },
+    modalLabel: {
+        fontSize: 14,
         fontWeight: '700',
+        marginBottom: 8,
+        color: '#112332',
+    },
+    modalInput: {
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 12,
+        padding: 14,
+        fontSize: 16,
+        color: '#111827',
+        backgroundColor: '#f8fafc',
+    },
+    modalInputError: {
+        borderColor: '#ef4444',
+    },
+    errorText: {
+        color: '#ef4444',
+        fontSize: 12,
+        marginTop: 4,
+    },
+    payerList: {
+        gap: 10,
+        paddingVertical: 4,
+    },
+    payerItem: {
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        backgroundColor: '#f1f5f9',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+    },
+    payerItemSelected: {
+        backgroundColor: '#2563eb',
+        borderColor: '#2563eb',
+    },
+    payerText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#112332',
+    },
+    payerTextSelected: {
+        color: '#fff',
+    },
+    receiptPickerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 14,
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderStyle: 'dashed',
+        borderRadius: 12,
+        backgroundColor: '#f8fafc',
+        gap: 12,
+    },
+    receiptPickerIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#f1f5f9',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    receiptPickerText: {
+        flex: 1,
+    },
+    receiptPickerTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#112332',
+    },
+    receiptPickerHint: {
+        fontSize: 12,
+        color: '#65717c',
+        marginTop: 2,
+    },
+    receiptPreviewCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        borderRadius: 12,
+        backgroundColor: '#f8fafc',
+        gap: 12,
+    },
+    receiptPreview: {
+        width: 50,
+        height: 50,
+        borderRadius: 8,
+    },
+    receiptPreviewInfo: {
+        flex: 1,
+    },
+    receiptPreviewTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#112332',
+    },
+    receiptPreviewName: {
+        fontSize: 12,
+        color: '#65717c',
+        marginTop: 2,
+    },
+    removeReceiptButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#fde8e8',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    saveButton: {
+        backgroundColor: '#112332',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 56,
+        marginBottom: 20,
+    },
+    saveButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    paymentActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    payButton: {
+        flex: 1,
+        minHeight: 52,
+        borderRadius: 26,
+        backgroundColor: '#112332',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    payButtonText: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    cancelButton: {
+        flex: 1,
+        minHeight: 52,
+        borderRadius: 26,
+        backgroundColor: '#e2e8f0',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cancelButtonText: {
+        color: '#112332',
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    historyList: {
+        paddingBottom: 40,
+    },
+    inviteCodeCard: {
+        backgroundColor: '#f8fafc',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        padding: 20,
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    inviteCodeLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#64748b',
+        marginBottom: 8,
     },
     inviteCode: {
-        marginTop: 8,
-        fontSize: 42,
-        fontWeight: '900',
-        color: '#112332',
-        letterSpacing: 1,
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#1e293b',
+        textAlign: 'center',
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        width: '100%',
     },
     inviteCodeHint: {
-        marginTop: 10,
-        fontSize: 14,
-        lineHeight: 20,
-        color: '#65717c',
+        fontSize: 12,
+        color: '#64748b',
         textAlign: 'center',
+        marginTop: 12,
+        lineHeight: 18,
     },
     inviteActions: {
         flexDirection: 'row',
@@ -1182,9 +1548,9 @@ const styles = StyleSheet.create({
     },
     shareButton: {
         flex: 1,
-        minHeight: 56,
-        borderRadius: 28,
-        backgroundColor: '#000',
+        minHeight: 52,
+        borderRadius: 26,
+        backgroundColor: '#2563eb',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1192,79 +1558,7 @@ const styles = StyleSheet.create({
     },
     shareButtonText: {
         color: '#fff',
-        fontSize: 16,
-        fontWeight: '800',
-    },
-    historyModal: {
-        width: '100%',
-        maxHeight: '78%',
-        borderTopLeftRadius: 30,
-        borderTopRightRadius: 30,
-        paddingHorizontal: 24,
-        paddingTop: 12,
-        paddingBottom: 28,
-        backgroundColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: -6,
-        },
-        shadowOpacity: 0.14,
-        shadowRadius: 16,
-        elevation: 12,
-    },
-    historyList: {
-        gap: 12,
-        paddingBottom: 10,
-    },
-    historyItem: {
-        minHeight: 88,
-        borderRadius: 18,
-        padding: 14,
-        backgroundColor: '#f5f7f9',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    historyBadge: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    historyBadgeExpense: {
-        backgroundColor: '#AEE7F8',
-    },
-    historyBadgePayment: {
-        backgroundColor: '#F2F56B',
-    },
-    historyContent: {
-        flex: 1,
-        gap: 3,
-    },
-    historyTitle: {
         fontSize: 15,
         fontWeight: '800',
-        color: '#112332',
-    },
-    historyDescription: {
-        fontSize: 13,
-        lineHeight: 18,
-        color: '#65717c',
-    },
-    historyDate: {
-        fontSize: 12,
-        color: '#8a96a3',
-    },
-    historyValue: {
-        fontSize: 14,
-        fontWeight: '800',
-    },
-    historyValueExpense: {
-        color: '#112332',
-    },
-    historyValuePayment: {
-        color: '#13795b',
     },
 });

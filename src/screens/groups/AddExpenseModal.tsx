@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
     TextInput,
     View,
+    Platform,
 } from 'react-native';
 import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
@@ -64,20 +65,24 @@ export default function AddExpenseModal({ navigation }: any) {
     }
 
     function handleChooseReceiptImage() {
-        Alert.alert('Adicionar comprovante', 'Escolha como deseja anexar a nota fiscal ou recibo.', [
-            {
-                text: 'Camera',
-                onPress: pickReceiptFromCamera,
-            },
-            {
-                text: 'Galeria',
-                onPress: pickReceiptFromGallery,
-            },
-            {
-                text: 'Cancelar',
-                style: 'cancel',
-            },
-        ]);
+        if (Platform.OS === 'web') {
+            pickReceiptFromGallery();
+        } else {
+            Alert.alert('Adicionar comprovante', 'Escolha como deseja anexar a nota fiscal ou recibo.', [
+                {
+                    text: 'Camera',
+                    onPress: pickReceiptFromCamera,
+                },
+                {
+                    text: 'Galeria',
+                    onPress: pickReceiptFromGallery,
+                },
+                {
+                    text: 'Cancelar',
+                    style: 'cancel',
+                },
+            ]);
+        }
     }
 
     return (

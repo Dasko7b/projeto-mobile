@@ -1,16 +1,23 @@
-import { Flame, Link, LayersPlus, LogIn, UsersRound, X } from 'lucide-react-native';
-import { useRef, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     Animated,
     FlatList,
     Modal,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
     View,
+    Alert,
+    ActivityIndicator,
+    Platform
 } from 'react-native';
+import { Flame, LogIn, LayersPlus, Link, X, UsersRound } from 'lucide-react-native';
+import { supabase } from '../../services/supabase';
+import { useAuth } from '../../context/AuthContext';
+import GroupCard from '../../components/GroupCard/GroupCard';
+import EmptyState from '../../components/EmptyState/EmptyState';
+import Loading from '../../components/Loading/Loading';
 
 type GroupData = {
     id: string;
@@ -20,36 +27,81 @@ type GroupData = {
     participants: number;
 };
 
-const mockGroups: GroupData[] = [
-    {
-        id: '1',
-        title: 'Comida na casa do Matheus',
-        tutor: 'Matheus Silva',
-        color: '#AEE7F8',
-        participants: 6,
-    },
-    {
-        id: '2',
-        title: 'Praia dos Crias',
-        tutor: 'Mauro Oruam',
-        color: '#F2F56B',
-        participants: 8,
-    },
-    {
-        id: '3',
-        title: 'Thiago teste testinho',
-        tutor: 'Thiago',
-        color: '#9EF0A8',
-        participants: 4,
-    },
-];
+const PASTEL_COLORS = ['#AEE7F8', '#F2F56B', '#9EF0A8', '#F8AEEC', '#F8B6AE'];
 
 export default function GroupsScreen({ navigation }: any) {
-    const [groups] = useState<GroupData[]>(mockGroups);
+    const { user, refreshConsolidatedBalance } = useAuth();
+    const [groups, setGroups] = useState<GroupData[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    
     const [isJoinModalVisible, setIsJoinModalVisible] = useState(false);
     const [groupLink, setGroupLink] = useState('');
+    const [joinLoading, setJoinLoading] = useState(false);
+    
     const joinModalTranslateY = useRef(new Animated.Value(360)).current;
-    const hasGroups = groups.length > 0;
+
+    async function loadGroups() {
+        if (!user) return;
+        try {
+            // RLS automatically filters groups where user is a member
+            const { data, error } = await supabase
+                .from('groups')
+                .select(`
+                    id,
+                    nome,
+                    group_members (
+                        user_id,
+                        users ( nome )
+                    )
+                `);
+
+            if (error) throw error;
+
+            if (data) {
+                const mapped: GroupData[] = data.map((g: any) => {
+                    // Get tutor/creator name (or first member's name as representative)
+                    const tutorName = g.group_members?.[0]?.users?.nome || 'Membro';
+                    
+                    // Generate a stable color based on group ID hash
+                    const hash = g.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+                    const color = PASTEL_COLORS[Math.abs(hash) % PASTEL_COLORS.length];
+
+                    return {
+                        id: g.id,
+                        title: g.nome,
+                        tutor: tutorName,
+                        color: color,
+                        participants: g.group_members?.length || 0,
+                    };
+                });
+                setGroups(mapped);
+            }
+        } catch (err: any) {
+            console.error("Erro ao carregar grupos:", err);
+            Alert.alert("Erro", "Não foi possível carregar os seus grupos.");
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }
+
+    useEffect(() => {
+        loadGroups();
+
+        const unsubscribe = navigation.addListener('focus', () => {
+            loadGroups();
+            refreshConsolidatedBalance();
+        });
+
+        return unsubscribe;
+    }, [navigation, user?.id]);
+
+    const handleRefresh = () => {
+        setRefreshing(true);
+        loadGroups();
+        refreshConsolidatedBalance();
+    };
 
     function handleCreateGroup() {
         navigation.navigate('CreateGroup');
@@ -76,7 +128,98 @@ export default function GroupsScreen({ navigation }: any) {
         }).start(() => {
             setIsJoinModalVisible(false);
             setGroupLink('');
+            setJoinLoading(false);
         });
+    }
+
+    async function handleJoinGroupSubmit() {
+        const inviteCode = groupLink.trim();
+        if (!inviteCode) {
+            if (Platform.OS === 'web') {
+                window.alert("Por favor, digite o código ou cole o link do grupo.");
+            } else {
+                Alert.alert("Erro", "Por favor, digite o código ou cole o link do grupo.");
+            }
+            return;
+        }
+
+        // Handle case where user pastes deep link like fechaconta://grupo/UUID
+        let cleanedId = inviteCode;
+        if (inviteCode.includes('://')) {
+            const parts = inviteCode.split('/');
+            cleanedId = parts[parts.length - 1];
+        }
+
+        // Basic UUID validation regex
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(cleanedId)) {
+            if (Platform.OS === 'web') {
+                window.alert("O código do grupo deve ser um identificador UUID válido.");
+            } else {
+                Alert.alert("Código inválido", "O código do grupo deve ser um identificador UUID válido.");
+            }
+            return;
+        }
+
+        setJoinLoading(true);
+        try {
+            // Insert member directly (RLS prevents select beforehand because user is not a member yet)
+            const { error: joinError } = await supabase
+                .from('group_members')
+                .insert({
+                    group_id: cleanedId,
+                    user_id: user?.id
+                });
+
+            if (joinError) {
+                if (joinError.code === '23505') { // Unique constraint violation
+                    if (Platform.OS === 'web') {
+                        window.alert("Você já participa deste grupo!");
+                    } else {
+                        Alert.alert("Aviso", "Você já participa deste grupo!");
+                    }
+                } else if (joinError.code === '23503') { // Foreign key constraint violation (group doesn't exist)
+                    if (Platform.OS === 'web') {
+                        window.alert("Grupo não encontrado. Verifique o código e tente novamente.");
+                    } else {
+                        Alert.alert("Grupo não encontrado", "Verifique o código e tente novamente.");
+                    }
+                } else {
+                    throw joinError;
+                }
+            } else {
+                // Now that the user is a member, they have access to read the group details to show the name in the alert!
+                const { data: groupData } = await supabase
+                    .from('groups')
+                    .select('nome')
+                    .eq('id', cleanedId)
+                    .single();
+
+                const groupName = groupData?.nome || "Novo Racha";
+
+                if (Platform.OS === 'web') {
+                    window.alert(`Você entrou no grupo "${groupName}"!`);
+                } else {
+                    Alert.alert("Sucesso", `Você entrou no grupo "${groupName}"!`);
+                }
+                handleCloseJoinModal();
+                loadGroups();
+                refreshConsolidatedBalance();
+            }
+        } catch (err: any) {
+            console.error("Erro ao entrar no grupo:", err);
+            if (Platform.OS === 'web') {
+                window.alert("Ocorreu um erro ao tentar se associar a este grupo.");
+            } else {
+                Alert.alert("Erro ao entrar", "Ocorreu um erro ao tentar se associar a este grupo.");
+            }
+        } finally {
+            setJoinLoading(false);
+        }
+    }
+
+    if (loading) {
+        return <Loading />;
     }
 
     return (
@@ -85,28 +228,20 @@ export default function GroupsScreen({ navigation }: any) {
                 <View>
                     <Text style={styles.title}>
                         Seus grupos
-                        <Flame size={36} color="#ff0000" fill="#ff0000" />
+                        <Flame size={36} color="#2563eb" fill="#2563eb" />
                     </Text>
                     <Text style={styles.subtitle}>
                         Rache, controle e pague com quem participa com você.
                     </Text>
                 </View>
-
-
             </View>
 
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.headerActions}
-                contentContainerStyle={styles.headerActionsContent}
-            >
+            <View style={styles.quickActionsContainer}>
                 <TouchableOpacity style={styles.headerActionButton} onPress={handleOpenJoinModal}>
                     <View style={styles.headerActionText}>
                         <Text style={styles.headerActionTitle}>Entrar em grupo</Text>
-                        <Text style={styles.headerActionSubtitle}>Use link ou codigo</Text>
+                        <Text style={styles.headerActionSubtitle}>Use link ou código</Text>
                     </View>
-
                     <View style={styles.headerActionIcon}>
                         <LogIn size={24} color="#112332" />
                     </View>
@@ -115,42 +250,36 @@ export default function GroupsScreen({ navigation }: any) {
                 <TouchableOpacity style={styles.headerActionButton} onPress={handleCreateGroup}>
                     <View style={styles.headerActionText}>
                         <Text style={styles.headerActionTitle}>Criar grupo</Text>
-                        <Text style={styles.headerActionSubtitle}>Comece um novo Racha</Text>
+                        <Text style={styles.headerActionSubtitle}>Comece um Racha</Text>
                     </View>
-
                     <View style={styles.headerActionIcon}>
-                        <LayersPlus size={25} color="#0044ff" fill="#0044ff" />
+                        <LayersPlus size={24} color="#2563eb" />
                     </View>
                 </TouchableOpacity>
-            </ScrollView>
+            </View>
 
-            {hasGroups ? (
+            {groups.length > 0 ? (
                 <FlatList
                     data={groups}
                     keyExtractor={(item) => item.id}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.list}
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
                     renderItem={({ item }) => (
-                        <TouchableOpacity
-                            activeOpacity={0.86}
+                        <GroupCard
+                            title={item.title}
+                            tutor={item.tutor}
+                            participantsCount={item.participants}
+                            color={item.color}
                             onPress={() => handleGroupPress(item)}
-                            style={[styles.card, { backgroundColor: item.color }]}
-                        >
-                            <Text style={styles.tutor}>{item.tutor}</Text>
-                            <Text style={styles.category}>Racha</Text>
-                            <Text style={styles.cardTitle}>{item.title}</Text>
-                            <Text style={styles.info}>{item.participants} participantes</Text>
-
-                            <View style={styles.cardButton}>
-                                <Text style={styles.arrow}>↗</Text>
-                            </View>
-                        </TouchableOpacity>
+                        />
                     )}
                     ListFooterComponent={(
                         <View style={styles.footerActions}>
                             <TouchableOpacity style={styles.createCard} onPress={handleCreateGroup}>
                                 <View style={styles.createCircle}>
-                                    <LayersPlus size={30} color="#0044ff" fill="#0044ff" />
+                                    <LayersPlus size={28} color="#2563eb" />
                                 </View>
                                 <View style={styles.createTextArea}>
                                     <Text style={styles.createTitle}>Criar um novo Racha?</Text>
@@ -160,7 +289,7 @@ export default function GroupsScreen({ navigation }: any) {
 
                             <TouchableOpacity style={styles.joinCard} onPress={handleOpenJoinModal}>
                                 <View style={styles.joinCircle}>
-                                    <Link size={28} color="#112332" />
+                                    <Link size={26} color="#112332" />
                                 </View>
                                 <View style={styles.createTextArea}>
                                     <Text style={styles.joinTitle}>Entrar em um grupo</Text>
@@ -171,27 +300,18 @@ export default function GroupsScreen({ navigation }: any) {
                     )}
                 />
             ) : (
-                <View style={styles.emptyState}>
-                    <View style={styles.emptyIcon}>
-                        <UsersRound size={44} color="#112332" />
-                    </View>
-
-                    <Text style={styles.emptyTitle}>Você ainda não participa de grupos</Text>
-                    <Text style={styles.emptyText}>
-                        Crie seu primeiro Racha para convidar pessoas, registrar despesas e acompanhar os pagamentos.
-                    </Text>
-
-                    <View style={styles.emptyActions}>
-                        <TouchableOpacity style={styles.emptyButton} onPress={handleCreateGroup}>
-                            <LayersPlus size={24} color="#fff" />
-                            <Text style={styles.emptyButtonText}>Criar grupo</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.emptyJoinButton} onPress={handleOpenJoinModal}>
-                            <LogIn size={22} color="#112332" />
-                            <Text style={styles.emptyJoinButtonText}>Entrar por link</Text>
-                        </TouchableOpacity>
-                    </View>
+                <View style={styles.emptyContainer}>
+                    <EmptyState
+                        icon={UsersRound}
+                        title="Você ainda não participa de grupos"
+                        description="Crie seu primeiro Racha para convidar pessoas, registrar despesas e acompanhar os pagamentos."
+                        actionLabel="Criar meu primeiro grupo"
+                        onAction={handleCreateGroup}
+                    />
+                    <TouchableOpacity style={styles.emptyJoinButton} onPress={handleOpenJoinModal}>
+                        <LogIn size={20} color="#112332" />
+                        <Text style={styles.emptyJoinButtonText}>Entrar por código</Text>
+                    </TouchableOpacity>
                 </View>
             )}
 
@@ -217,10 +337,10 @@ export default function GroupsScreen({ navigation }: any) {
                         <View style={styles.modalHandle} />
 
                         <View style={styles.modalHeader}>
-                            <View>
+                            <View style={{ flex: 1 }}>
                                 <Text style={styles.modalTitle}>Entrar em grupo</Text>
                                 <Text style={styles.modalSubtitle}>
-                                    Cole o link ou código de convite recebido
+                                    Cole o link ou UUID de convite recebido
                                 </Text>
                             </View>
 
@@ -230,23 +350,37 @@ export default function GroupsScreen({ navigation }: any) {
                         </View>
 
                         <View style={styles.modalForm}>
-                            <Text style={styles.modalLabel}>Link ou código</Text>
+                            <Text style={styles.modalLabel}>Código do grupo (UUID)</Text>
                             <TextInput
-                                placeholder="Ex: Ex93892 ou fechaconta://grupo/Ex93892"
+                                placeholder="Ex: d3b07384-d113-4956-a57e-ee9c61b7f0de"
                                 value={groupLink}
                                 onChangeText={setGroupLink}
                                 autoCapitalize="none"
+                                editable={!joinLoading}
                                 style={styles.modalInput}
+                                placeholderTextColor="#9ca3af"
                             />
                         </View>
 
                         <View style={styles.modalActions}>
-                            <TouchableOpacity style={styles.cancelButton} onPress={handleCloseJoinModal}>
+                            <TouchableOpacity 
+                                style={styles.cancelButton} 
+                                onPress={handleCloseJoinModal}
+                                disabled={joinLoading}
+                            >
                                 <Text style={styles.cancelButtonText}>Cancelar</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.enterButton} onPress={handleCloseJoinModal}>
-                                <Text style={styles.enterButtonText}>Entrar</Text>
+                            <TouchableOpacity 
+                                style={styles.enterButton} 
+                                onPress={handleJoinGroupSubmit}
+                                disabled={joinLoading}
+                            >
+                                {joinLoading ? (
+                                    <ActivityIndicator color="#fff" />
+                                ) : (
+                                    <Text style={styles.enterButtonText}>Entrar</Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                     </Animated.View>
@@ -258,8 +392,6 @@ export default function GroupsScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
     container: {
-        width: '100%',
-        height: '100%',
         flex: 1,
         backgroundColor: '#fff',
         paddingHorizontal: 24,
@@ -268,135 +400,91 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        gap: 18,
         alignItems: 'flex-start',
         marginBottom: 22,
     },
     title: {
         fontFamily: 'Inter_700Bold',
-        fontSize: 40,
+        fontSize: 36,
         color: '#112332',
+        flexDirection: 'row',
+        alignItems: 'center',
     },
     subtitle: {
-        maxWidth: 260,
+        maxWidth: 280,
         marginTop: 8,
-        fontSize: 16,
-        lineHeight: 23,
+        fontSize: 15,
+        lineHeight: 22,
         color: '#5f6b76',
     },
-    headerActions: {
-        marginHorizontal: -24,
-        marginBottom: 20,
-    },
-    headerActionsContent: {
+    quickActionsContainer: {
+        flexDirection: 'row',
         gap: 12,
-        paddingHorizontal: 24,
-        paddingBottom: 80,
+        marginBottom: 24,
     },
     headerActionButton: {
+        flex: 1,
         flexDirection: 'row',
-        width: 240,
-        minHeight: 78,
         borderRadius: 20,
-        paddingHorizontal: 16,
-        backgroundColor: '#f1f5f9',
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#f1f5f9',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 12,
         shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 3,
-        },
-        shadowOpacity: 0.12,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+        elevation: 2,
     },
     headerActionText: {
         flex: 1,
     },
     headerActionTitle: {
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '800',
         color: '#112332',
     },
     headerActionSubtitle: {
-        marginTop: 4,
-        fontSize: 13,
-        lineHeight: 18,
-        color: '#5f6b76',
+        marginTop: 2,
+        fontSize: 11,
+        color: '#6b7280',
     },
     headerActionIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#fff',
         alignItems: 'center',
         justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
     },
     list: {
-        gap: 20,
-        paddingBottom: 120,
+        paddingBottom: 100,
     },
     footerActions: {
         gap: 16,
-    },
-    card: {
-        width: '100%',
-        minHeight: 220,
-        borderRadius: 32,
-        padding: 24,
-        justifyContent: 'space-between',
-    },
-    tutor: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#111',
-    },
-    category: {
-        fontSize: 14,
-        opacity: 0.6,
-        color: '#111',
-    },
-    cardTitle: {
-        maxWidth: '82%',
-        fontSize: 34,
-        fontWeight: 'bold',
-        color: '#000',
-    },
-    info: {
-        fontSize: 14,
-        color: '#111',
-    },
-    cardButton: {
-        position: 'absolute',
-        top: 20,
-        right: 20,
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: '#000',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    arrow: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
+        marginTop: 24,
     },
     createCard: {
-        minHeight: 132,
+        minHeight: 120,
         borderRadius: 28,
         padding: 20,
         backgroundColor: '#112332',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 18,
+        gap: 16,
     },
     createCircle: {
-        width: 62,
-        height: 62,
-        borderRadius: 31,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         backgroundColor: '#fff',
         alignItems: 'center',
         justifyContent: 'center',
@@ -405,104 +493,66 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     createTitle: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: '800',
         color: '#fff',
     },
     createSubtitle: {
-        marginTop: 6,
-        fontSize: 14,
-        lineHeight: 20,
+        marginTop: 4,
+        fontSize: 13,
+        lineHeight: 18,
         color: '#d7dee6',
     },
     joinCard: {
-        minHeight: 116,
+        minHeight: 110,
         borderRadius: 28,
         padding: 20,
-        backgroundColor: '#f1f5f9',
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 18,
+        gap: 16,
     },
     joinCircle: {
-        width: 62,
-        height: 62,
-        borderRadius: 31,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         backgroundColor: '#F2F56B',
         alignItems: 'center',
         justifyContent: 'center',
     },
     joinTitle: {
-        fontSize: 22,
+        fontSize: 18,
         fontWeight: '800',
         color: '#112332',
     },
     joinSubtitle: {
-        marginTop: 6,
-        fontSize: 14,
-        lineHeight: 20,
+        marginTop: 4,
+        fontSize: 13,
+        lineHeight: 18,
         color: '#5f6b76',
     },
-    emptyState: {
+    emptyContainer: {
         flex: 1,
-        alignItems: 'center',
         justifyContent: 'center',
-        paddingBottom: 80,
-    },
-    emptyIcon: {
-        width: 92,
-        height: 92,
-        borderRadius: 46,
-        backgroundColor: '#F2F56B',
         alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 22,
-    },
-    emptyTitle: {
-        fontFamily: 'Inter_700Bold',
-        fontSize: 30,
-        lineHeight: 36,
-        textAlign: 'center',
-        color: '#112332',
-    },
-    emptyText: {
-        marginTop: 12,
-        marginBottom: 26,
-        fontSize: 16,
-        lineHeight: 24,
-        textAlign: 'center',
-        color: '#5f6b76',
-    },
-    emptyButton: {
-        minHeight: 56,
-        borderRadius: 28,
-        paddingHorizontal: 24,
-        backgroundColor: '#000',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-    },
-    emptyActions: {
-        width: '100%',
-        gap: 12,
-    },
-    emptyButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '800',
+        paddingBottom: 60,
     },
     emptyJoinButton: {
-        minHeight: 56,
-        borderRadius: 28,
+        minHeight: 52,
+        borderRadius: 26,
+        paddingHorizontal: 24,
         backgroundColor: '#f1f5f9',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
+        gap: 8,
+        marginTop: -10,
     },
     emptyJoinButtonText: {
         color: '#112332',
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: '800',
     },
     modalOverlay: {
@@ -511,7 +561,7 @@ const styles = StyleSheet.create({
     },
     modalBackdrop: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.35)',
+        backgroundColor: 'rgba(0,0,0,0.4)',
     },
     joinModal: {
         width: '100%',
@@ -522,20 +572,17 @@ const styles = StyleSheet.create({
         paddingBottom: 34,
         backgroundColor: '#fff',
         shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: -6,
-        },
-        shadowOpacity: 0.14,
-        shadowRadius: 16,
-        elevation: 12,
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+        elevation: 8,
     },
     modalHandle: {
         alignSelf: 'center',
-        width: 46,
+        width: 40,
         height: 5,
         borderRadius: 999,
-        backgroundColor: '#d8e0e8',
+        backgroundColor: '#e2e8f0',
         marginBottom: 20,
     },
     modalHeader: {
@@ -547,18 +594,18 @@ const styles = StyleSheet.create({
     },
     modalTitle: {
         fontFamily: 'Inter_700Bold',
-        fontSize: 28,
+        fontSize: 26,
         color: '#112332',
     },
     modalSubtitle: {
         marginTop: 4,
-        fontSize: 14,
+        fontSize: 13,
         color: '#65717c',
     },
     closeButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#f1f5f9',
         alignItems: 'center',
         justifyContent: 'center',
@@ -567,17 +614,18 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
     modalLabel: {
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '700',
-        marginBottom: 10,
+        marginBottom: 8,
         color: '#112332',
     },
     modalInput: {
         borderWidth: 1,
-        borderColor: '#d8e0e8',
+        borderColor: '#cbd5e1',
         borderRadius: 12,
-        padding: 15,
+        padding: 14,
         fontSize: 16,
+        color: '#111827',
         backgroundColor: '#f8fafc',
     },
     modalActions: {
@@ -586,28 +634,28 @@ const styles = StyleSheet.create({
     },
     cancelButton: {
         flex: 1,
-        minHeight: 56,
-        borderRadius: 28,
-        backgroundColor: '#eef2f6',
+        minHeight: 52,
+        borderRadius: 26,
+        backgroundColor: '#e2e8f0',
         alignItems: 'center',
         justifyContent: 'center',
     },
     cancelButtonText: {
         color: '#112332',
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '800',
     },
     enterButton: {
         flex: 1,
-        minHeight: 56,
-        borderRadius: 28,
-        backgroundColor: '#000',
+        minHeight: 52,
+        borderRadius: 26,
+        backgroundColor: '#112332',
         alignItems: 'center',
         justifyContent: 'center',
     },
     enterButtonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '800',
     },
 });

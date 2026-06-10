@@ -1,44 +1,35 @@
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Flame } from 'lucide-react-native';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { useAuth } from '../../context/AuthContext';
-import { useState } from 'react';
 import { supabase } from '../../services/supabase';
 
 export default function LoginScreen({ navigation }: any) {
-    const { setUser } = useAuth();
-
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
     async function handleLogin() {
         if (!email || !password) {
-            Alert.alert("Erro:", "Por favor, preencha todos os campos.");
+            Alert.alert("Campos obrigatórios", "Por favor, preencha o email e a senha.");
             return;
         }
 
         setLoading(true);
-        
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email: email,
-            password: password,
-        });
-
-        if (error) {
-            Alert.alert("Erro ao entrar:", error.message);
-            setLoading(false);
-            return;
-        }
-
-        if (data.user) {
-            setUser({
-                name: data.user.user_metadata?.name || 'Utilizador',
-                email: data.user.email || '',
-                avatarUrl: data.user.user_metadata?.avatarUrl || 'https://i.pravatar.cc/150',
+        try {
+            const { error } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password: password,
             });
+
+            if (error) {
+                Alert.alert("Erro ao entrar", error.message);
+            }
+        } catch (err: any) {
+            Alert.alert("Erro de conexão", "Não foi possível conectar ao servidor.");
+            console.error(err);
+        } finally {
+            setLoading(false);
         }
-        
-        setLoading(false);
     }
 
     function handleRegister() {
@@ -47,41 +38,54 @@ export default function LoginScreen({ navigation }: any) {
 
     return (
         <View style={styles.container}>
-
-            <View style={styles.imageBackground}>
-                <Flame size={80} color="#ff0000" fill="#ff0000" />
+            <View style={styles.logoContainer}>
+                <Flame size={72} color="#2563eb" fill="#2563eb" />
+                <Text style={styles.title}>FechaConta</Text>
+                <Text style={styles.subtitle}>Rache, controle e pague contas de forma simples.</Text>
             </View>
 
-            <Text style={styles.title}>FechaConta</Text>
+            <View style={styles.form}>
+                <TextInput
+                    placeholder="E-mail"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    style={styles.input}
+                    placeholderTextColor="#9ca3af"
+                />
 
-            <TextInput
-                placeholder="Email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                style={styles.input}
-            />
+                <TextInput
+                    placeholder="Senha"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    style={styles.input}
+                    placeholderTextColor="#9ca3af"
+                />
 
-            <TextInput
-                placeholder="Senha"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                style={styles.input}
-            />
+                <TouchableOpacity 
+                    style={styles.button} 
+                    onPress={handleLogin}
+                    disabled={loading}
+                >
+                    {loading ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <Text style={styles.buttonText}>Entrar</Text>
+                    )}
+                </TouchableOpacity>
 
-            <TouchableOpacity style={styles.button} onPress={() => handleLogin()}>
-                <Text style={styles.buttonText}>{loading ? "Carregando..." : "Entrar"}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={{ marginTop: 20, padding: 10, alignItems: 'center' }}
-                onPress={() => handleRegister()}
-            >
-                <Text style={{ color: '#666', fontSize: 14 }}>
-                    Não tem uma conta? <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>Cadastre-se</Text>
-                </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.registerLink}
+                    onPress={handleRegister}
+                    disabled={loading}
+                >
+                    <Text style={styles.registerLinkText}>
+                        Não tem uma conta? <Text style={styles.registerHighlight}>Cadastre-se</Text>
+                    </Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
@@ -93,37 +97,60 @@ const styles = StyleSheet.create({
         padding: 24,
         backgroundColor: '#ffffff',
     },
-
-    title: {
-        marginBottom: 32,
-        textAlign: 'center',
-        fontFamily: 'Inter_700Bold',
-        fontSize: 38,
-        color: '#112332'
+    logoContainer: {
+        alignItems: 'center',
+        marginBottom: 40,
     },
-
+    title: {
+        marginTop: 12,
+        fontFamily: 'Inter_700Bold',
+        fontSize: 36,
+        color: '#112332',
+    },
+    subtitle: {
+        fontSize: 14,
+        color: '#6b7280',
+        textAlign: 'center',
+        marginTop: 8,
+    },
+    form: {
+        width: '100%',
+    },
     input: {
         borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 8,
-        padding: 14,
-        marginBottom: 16,
-    },
-
-    button: {
-        backgroundColor: '#000',
+        borderColor: '#e5e7eb',
+        borderRadius: 12,
         padding: 16,
-        borderRadius: 8,
-        alignItems: 'center',
+        marginBottom: 16,
+        fontSize: 16,
+        color: '#111827',
+        backgroundColor: '#f9fafb',
     },
-
+    button: {
+        backgroundColor: '#112332',
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 8,
+        minHeight: 56,
+    },
     buttonText: {
         color: '#fff',
         fontWeight: 'bold',
+        fontSize: 16,
     },
-
-    imageBackground: {
-        margin: 'auto',
-        marginVertical: 0,
+    registerLink: {
+        marginTop: 24,
+        padding: 10,
+        alignItems: 'center',
+    },
+    registerLinkText: {
+        color: '#4b5563',
+        fontSize: 14,
+    },
+    registerHighlight: {
+        color: '#2563eb',
+        fontWeight: 'bold',
     },
 });

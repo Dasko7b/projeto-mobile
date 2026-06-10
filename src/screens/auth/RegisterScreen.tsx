@@ -8,30 +8,58 @@ import {
     StyleSheet,
     KeyboardAvoidingView,
     ScrollView,
-    Platform
+    Platform,
+    Alert
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../services/supabase';
 
 export default function RegisterScreen({ navigation }: any) {
     const { setUser } = useAuth();
+    const [nome, setNome] = useState('');
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
     const [confirmarSenha, setConfirmarSenha] = useState('');
+    const [loading, setLoading] = useState(false);
 
     const [senhasIguais, setSenhasIguais] = useState(true);
 
-    function handleRegister() {
-        if (senha === confirmarSenha) {
-            setSenhasIguais(true);
-            setUser({
-                name: 'Usuário FechaConta',
-                email: email || 'usuario@fechaconta.app',
-                avatarUrl: 'https://i.pravatar.cc/150?img=12',
-            });
-        } else {
-            setSenhasIguais(false);
+    async function handleRegister() {
+        if (!email || !senha || !confirmarSenha) {
+            Alert.alert("Erro", "Preencha todos os campos");
+            return;
         }
+
+        setLoading(true);
+
+        if (senha !== confirmarSenha) {
+            setSenhasIguais(false);
+            setLoading(false);
+            return;
+        }
+
+        const { data, error } = await supabase.auth.signUp({
+            email: email,
+            password: senha,
+            options: {
+                data: {
+                    name: nome,
+                    avatarUrl: 'https://i.pravatar.cc/150'
+                }
+            }
+        });
+
+        if (error) {
+            Alert.alert("Erro no cadastro:", error.message);
+        } else {
+            Alert.alert("Sucesso!", "Conta criada com sucesso.");
+            navigation.navigate('Login');
+        }
+        setLoading(false);
     }
+
+
+
 
     return (
         <KeyboardAvoidingView
@@ -49,6 +77,13 @@ export default function RegisterScreen({ navigation }: any) {
                     </View>
 
                     <Text style={styles.title}>FechaConta</Text>
+
+                    <TextInput
+                        placeholder="Nome Completo"
+                        style={styles.input}
+                        value={nome}
+                        onChangeText={setNome}
+                    />
 
                     <TextInput
                         placeholder="Email"

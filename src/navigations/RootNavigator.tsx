@@ -1,24 +1,14 @@
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer } from '@react-navigation/native';
+import { useAuth } from '../context/AuthContext';
+import AuthStack from './AuthStack';
+import AppTabs from './AppTabs';
 
-import { useAuth } from "../context/AuthContext";
-
-import { AuthStack } from "./AuthStack";
-import { AppTabs } from "./AppTabs";
-
-export function RootNavigator() {
-
+export default function RootNavigator() {
     const { user } = useAuth();
 
     return (
-
         <NavigationContainer>
-
-            {user
-                ? <AppTabs />
-                : <AuthStack />
-            }
-
+            {user ? <AppTabs /> : <AuthStack />}
         </NavigationContainer>
-
     );
 }

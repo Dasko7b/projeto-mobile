@@ -21,6 +21,13 @@ export default function RegisterScreen({ navigation }: any) {
     const [confirmarSenha, setConfirmarSenha] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // Inline Error States
+    const [nomeError, setNomeError] = useState('');
+    const [emailError, setEmailError] = useState('');
+    const [senhaError, setSenhaError] = useState('');
+    const [confirmarSenhaError, setConfirmarSenhaError] = useState('');
+    const [generalError, setGeneralError] = useState('');
+
     function showAlert(title: string, message: string, onPress?: () => void) {
         if (Platform.OS === 'web') {
             window.alert(`${title}: ${message}`);
@@ -35,20 +42,42 @@ export default function RegisterScreen({ navigation }: any) {
     }
 
     async function handleRegister() {
-        if (!nome.trim() || !email.trim() || !senha || !confirmarSenha) {
-            showAlert("Erro de validação", "Por favor, preencha todos os campos.");
-            return;
+        // Reset Error States
+        setNomeError('');
+        setEmailError('');
+        setSenhaError('');
+        setConfirmarSenhaError('');
+        setGeneralError('');
+
+        let hasError = false;
+
+        if (!nome.trim()) {
+            setNomeError('Por favor, preencha o seu nome completo.');
+            hasError = true;
         }
 
-        if (senha !== confirmarSenha) {
-            showAlert("Erro de validação", "As senhas não coincidem.");
-            return;
+        if (!email.trim()) {
+            setEmailError('Por favor, preencha o seu e-mail.');
+            hasError = true;
         }
 
-        if (senha.length < 6) {
-            showAlert("Erro de validação", "A senha deve ter pelo menos 6 caracteres.");
-            return;
+        if (!senha) {
+            setSenhaError('Por favor, crie uma senha.');
+            hasError = true;
+        } else if (senha.length < 6) {
+            setSenhaError('A senha deve ter pelo menos 6 caracteres.');
+            hasError = true;
         }
+
+        if (!confirmarSenha) {
+            setConfirmarSenhaError('Por favor, confirme a sua senha.');
+            hasError = true;
+        } else if (senha !== confirmarSenha) {
+            setConfirmarSenhaError('As senhas não coincidem.');
+            hasError = true;
+        }
+
+        if (hasError) return;
 
         setLoading(true);
         try {
@@ -63,7 +92,7 @@ export default function RegisterScreen({ navigation }: any) {
             });
 
             if (error) {
-                showAlert("Erro ao cadastrar", error.message);
+                setGeneralError(error.message);
                 return;
             }
 
@@ -73,7 +102,7 @@ export default function RegisterScreen({ navigation }: any) {
                 () => navigation.navigate('Login')
             );
         } catch (err: any) {
-            showAlert("Erro de conexão", "Não foi possível conectar ao servidor.");
+            setGeneralError('Não foi possível conectar ao servidor. Verifique sua conexão.');
             console.error(err);
         } finally {
             setLoading(false);
@@ -106,42 +135,88 @@ export default function RegisterScreen({ navigation }: any) {
                     </View>
 
                     <View style={styles.form}>
-                        <TextInput
-                            placeholder="Nome Completo"
-                            style={styles.input}
-                            value={nome}
-                            onChangeText={setNome}
-                            autoCapitalize="words"
-                            placeholderTextColor="#9ca3af"
-                        />
+                        {generalError ? (
+                            <View style={styles.errorBanner}>
+                                <Text style={styles.errorBannerText}>{generalError}</Text>
+                            </View>
+                        ) : null}
 
-                        <TextInput
-                            placeholder="E-mail"
-                            style={styles.input}
-                            value={email}
-                            onChangeText={setEmail}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            placeholderTextColor="#9ca3af"
-                        />
+                        <View style={styles.inputGroup}>
+                            <TextInput
+                                placeholder="Nome Completo"
+                                style={[
+                                    styles.input,
+                                    nomeError ? styles.inputError : null
+                                ]}
+                                value={nome}
+                                onChangeText={(text) => {
+                                    setNome(text);
+                                    if (nomeError) setNomeError('');
+                                }}
+                                autoCapitalize="words"
+                                placeholderTextColor="#9ca3af"
+                                editable={!loading}
+                            />
+                            {nomeError ? <Text style={styles.errorText}>{nomeError}</Text> : null}
+                        </View>
 
-                        <TextInput
-                            placeholder="Senha (mínimo 6 caracteres)"
-                            secureTextEntry
-                            style={styles.input}
-                            value={senha}
-                            onChangeText={setSenha}
-                            placeholderTextColor="#9ca3af"
-                        />
+                        <View style={styles.inputGroup}>
+                            <TextInput
+                                placeholder="E-mail"
+                                style={[
+                                    styles.input,
+                                    emailError ? styles.inputError : null
+                                ]}
+                                value={email}
+                                onChangeText={(text) => {
+                                    setEmail(text);
+                                    if (emailError) setEmailError('');
+                                }}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                placeholderTextColor="#9ca3af"
+                                editable={!loading}
+                            />
+                            {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+                        </View>
 
-                        <TextInput
-                            placeholder="Confirme a sua Senha"
-                            secureTextEntry
-                            style={styles.input}
-                            value={confirmarSenha}
-                            onChangeText={setConfirmarSenha}
-                            placeholderTextColor="#9ca3af"
-                        />
+                        <View style={styles.inputGroup}>
+                            <TextInput
+                                placeholder="Senha (mínimo 6 caracteres)"
+                                secureTextEntry
+                                style={[
+                                    styles.input,
+                                    senhaError ? styles.inputError : null
+                                ]}
+                                value={senha}
+                                onChangeText={(text) => {
+                                    setSenha(text);
+                                    if (senhaError) setSenhaError('');
+                                }}
+                                placeholderTextColor="#9ca3af"
+                                editable={!loading}
+                            />
+                            {senhaError ? <Text style={styles.errorText}>{senhaError}</Text> : null}
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <TextInput
+                                placeholder="Confirme a sua Senha"
+                                secureTextEntry
+                                style={[
+                                    styles.input,
+                                    confirmarSenhaError ? styles.inputError : null
+                                ]}
+                                value={confirmarSenha}
+                                onChangeText={(text) => {
+                                    setConfirmarSenha(text);
+                                    if (confirmarSenhaError) setConfirmarSenhaError('');
+                                }}
+                                placeholderTextColor="#9ca3af"
+                                editable={!loading}
+                            />
+                            {confirmarSenhaError ? <Text style={styles.errorText}>{confirmarSenhaError}</Text> : null}
+                        </View>
 
                         <TouchableOpacity 
                             style={styles.button} 
@@ -201,15 +276,42 @@ const styles = StyleSheet.create({
     form: {
         width: '100%',
     },
+    inputGroup: {
+        marginBottom: 16,
+    },
     input: {
         borderWidth: 1,
         borderColor: '#e5e7eb',
         borderRadius: 12,
         padding: 16,
-        marginBottom: 16,
         fontSize: 16,
         color: '#111827',
         backgroundColor: '#f9fafb',
+    },
+    inputError: {
+        borderColor: '#ef4444',
+        backgroundColor: '#fef2f2',
+    },
+    errorText: {
+        color: '#ef4444',
+        fontSize: 12,
+        marginTop: 4,
+        fontWeight: '600',
+        paddingLeft: 4,
+    },
+    errorBanner: {
+        backgroundColor: '#fef2f2',
+        borderColor: '#fca5a5',
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 20,
+    },
+    errorBannerText: {
+        color: '#b91c1c',
+        fontSize: 14,
+        fontWeight: '600',
+        textAlign: 'center',
     },
     button: {
         backgroundColor: '#112332',

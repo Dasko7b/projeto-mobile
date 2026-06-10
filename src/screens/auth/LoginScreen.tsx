@@ -1,19 +1,47 @@
 import { Flame } from 'lucide-react-native';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { useState } from 'react';
+import { supabase } from '../../services/supabase';
 
 export default function LoginScreen({ navigation }: any) {
     const { setUser } = useAuth();
 
-    function handleLogin() {
-        setUser({
-            name: 'Usuário FechaConta',
-            email: 'usuario@fechaconta.app',
-            avatarUrl: 'https://i.pravatar.cc/150?img=12',
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    async function handleLogin() {
+        if (!email || !password) {
+            Alert.alert("Erro:", "Por favor, preencha todos os campos.");
+            return;
+        }
+
+        setLoading(true);
+        
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: password,
         });
+
+        if (error) {
+            Alert.alert("Erro ao entrar:", error.message);
+            setLoading(false);
+            return;
+        }
+
+        if (data.user) {
+            setUser({
+                name: data.user.user_metadata?.name || 'Utilizador',
+                email: data.user.email || '',
+                avatarUrl: data.user.user_metadata?.avatarUrl || 'https://i.pravatar.cc/150',
+            });
+        }
+        
+        setLoading(false);
     }
 
-    function handleregister() {
+     function handleregister() {
         navigation.navigate('Register');
     }
 

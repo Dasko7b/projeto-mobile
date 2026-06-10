@@ -41,7 +41,7 @@ export default function LoginScreen({ navigation }: any) {
         setLoading(false);
     }
 
-     function handleregister() {
+    function handleRegister() {
         navigation.navigate('Register');
     }
 
@@ -56,22 +56,27 @@ export default function LoginScreen({ navigation }: any) {
 
             <TextInput
                 placeholder="Email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
                 style={styles.input}
             />
 
             <TextInput
                 placeholder="Senha"
+                value={password}
+                onChangeText={setPassword}
                 secureTextEntry
                 style={styles.input}
             />
 
             <TouchableOpacity style={styles.button} onPress={() => handleLogin()}>
-                <Text style={styles.buttonText}>Entrar</Text>
+                <Text style={styles.buttonText}>{loading ? "Carregando..." : "Entrar"}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
                 style={{ marginTop: 20, padding: 10, alignItems: 'center' }}
-                onPress={() => handleregister()}
+                onPress={() => handleRegister()}
             >
                 <Text style={{ color: '#666', fontSize: 14 }}>
                     Não tem uma conta? <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>Cadastre-se</Text>

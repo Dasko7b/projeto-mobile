@@ -151,13 +151,14 @@ export function useGroupDetails(group?: GroupData) {
     const myBalance = myBalanceItem ? myBalanceItem.balance : 0;
     const myPaid = myBalanceItem ? myBalanceItem.paid : 0;
 
+    //função para escolher imagem do recibo, com opções de câmera ou galeria.
     async function pickReceiptFromCamera() {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {
             Alert.alert('Permissão necessária', 'Autorize o acesso à câmera para fotografar o recibo.');
             return;
         }
-
+        //uso da imagem
         const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
@@ -172,13 +173,14 @@ export function useGroupDetails(group?: GroupData) {
         }
     }
 
+    //função para permissão e escolha da imagem
     async function pickReceiptFromGallery() {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
             Alert.alert('Permissão necessária', 'Autorize o acesso à galeria para anexar o recibo.');
             return;
         }
-
+        //abertura da galeria
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
@@ -421,6 +423,7 @@ export function useGroupDetails(group?: GroupData) {
         }).start(() => setIsInviteModalVisible(false));
     }
 
+    //função para compartilhar o código de convite do grupo usando as opções nativas de compartilhamento do dispositivo.
     async function handleShareInvite() {
         if (!group) return;
 

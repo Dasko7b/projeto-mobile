@@ -320,9 +320,9 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                                             </TouchableOpacity>
                                         </View>
                                     ) : (
-                                        <TouchableOpacity
+                                        <TouchableOpacity //opação para escolher imagem
                                             style={styles.receiptPickerButton}
-                                            onPress={handleChooseReceiptImage}
+                                            onPress={handleChooseReceiptImage} 
                                             disabled={expenseSaving}
                                         >
                                             <View style={styles.receiptPickerIcon}>
@@ -570,7 +570,7 @@ export default function GroupDetailsScreen({ route, navigation }: any) {
                             <TouchableOpacity style={styles.cancelButton} onPress={handleCloseInviteModal}>
                                 <Text style={styles.cancelButtonText}>Cancelar</Text>
                             </TouchableOpacity>
-
+                            {/* Botão para compartilhar o código de convite */}
                             <TouchableOpacity style={styles.shareButton} onPress={handleShareInvite}>
                                 <Share2 size={20} color="#fff" />
                                 <Text style={styles.shareButtonText}>Compartilhar</Text>

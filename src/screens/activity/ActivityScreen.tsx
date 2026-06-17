@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
+import { View, Text, FlatList, Alert } from 'react-native';
 import { History, ReceiptText } from 'lucide-react-native';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../context/AuthContext';
 import Loading from '../../components/Loading/Loading';
 import EmptyState from '../../components/EmptyState/EmptyState';
 import ExpenseCard from '../../components/ExpenseCard/ExpenseCard';
+import { styles } from '../../styles/activity/ActivityScreen.styles';
 
 type ActivityItem = {
     id: string;
@@ -164,33 +165,3 @@ export default function ActivityScreen({ navigation }: any) {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        paddingHorizontal: 24,
-        paddingTop: 54,
-    },
-    header: {
-        marginBottom: 24,
-    },
-    title: {
-        fontFamily: 'Inter_700Bold',
-        fontSize: 34,
-        color: '#112332',
-    },
-    subtitle: {
-        marginTop: 6,
-        fontSize: 14,
-        color: '#65717c',
-    },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    list: {
-        paddingBottom: 100,
-    },
-});

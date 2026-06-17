@@ -1,16 +1,16 @@
 import {
     Alert,
     Image,
-    StyleSheet,
     Text,
     TouchableOpacity,
     TextInput,
     View,
-    Platform,
+    Platform
 } from 'react-native';
 import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, Image as ImageIcon, Trash2, X } from 'lucide-react-native';
+import { styles } from '../../styles/groups/AddExpenseModal.styles';
 
 type ReceiptImage = {
     uri: string;
@@ -152,131 +152,3 @@ export default function AddExpenseModal({ navigation }: any) {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        padding: 24,
-        paddingTop: 54,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 30,
-    },
-    title: {
-        fontFamily: 'Inter_700Bold',
-        fontSize: 30,
-        color: '#112332',
-    },
-    closeButton: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: '#f1f5f9',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    form: {
-        gap: 18,
-        flex: 1,
-    },
-    label: {
-        fontSize: 15,
-        fontWeight: '700',
-        marginBottom: 10,
-        color: '#112332',
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: '#d8e0e8',
-        borderRadius: 12,
-        padding: 15,
-        fontSize: 16,
-        backgroundColor: '#f8fafc',
-    },
-    receiptPickerButton: {
-        minHeight: 84,
-        borderWidth: 1,
-        borderColor: '#d8e0e8',
-        borderRadius: 16,
-        padding: 14,
-        backgroundColor: '#f8fafc',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    receiptPickerIcon: {
-        width: 46,
-        height: 46,
-        borderRadius: 23,
-        backgroundColor: '#eef2f6',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    receiptPickerText: {
-        flex: 1,
-    },
-    receiptPickerTitle: {
-        fontSize: 15,
-        fontWeight: '800',
-        color: '#112332',
-    },
-    receiptPickerHint: {
-        marginTop: 4,
-        fontSize: 13,
-        color: '#65717c',
-    },
-    receiptPreviewCard: {
-        minHeight: 86,
-        borderWidth: 1,
-        borderColor: '#d8e0e8',
-        borderRadius: 16,
-        padding: 10,
-        backgroundColor: '#f8fafc',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    receiptPreview: {
-        width: 66,
-        height: 66,
-        borderRadius: 12,
-        backgroundColor: '#eef2f6',
-    },
-    receiptPreviewInfo: {
-        flex: 1,
-    },
-    receiptPreviewTitle: {
-        fontSize: 15,
-        fontWeight: '800',
-        color: '#112332',
-    },
-    receiptPreviewName: {
-        marginTop: 4,
-        fontSize: 13,
-        color: '#65717c',
-    },
-    removeReceiptButton: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
-        backgroundColor: '#fff1f1',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    button: {
-        minHeight: 58,
-        borderRadius: 29,
-        backgroundColor: '#000',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    buttonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '800',
-    },
-});

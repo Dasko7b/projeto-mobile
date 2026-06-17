@@ -35,7 +35,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [consolidatedBalance, setConsolidatedBalance] = useState(0);
 
-    // Function to fetch or refresh user profile from public.users table
     async function fetchUserProfile(sessionUser: User) {
         try {
             const { data, error } = await supabase
@@ -45,8 +44,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .single();
 
             if (error) {
-                // If profile is not found in public.users yet, create a temporary profile
-                // from metadata since the DB trigger might have a slight delay
                 setUser({
                     id: sessionUser.id,
                     nome: sessionUser.user_metadata?.nome || "Usuário",
@@ -69,7 +66,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
-    // Function to fetch or refresh consolidated balance
     async function refreshConsolidatedBalance() {
         if (!session?.user) return;
         try {
@@ -79,7 +75,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .eq("user_id", session.user.id);
 
             if (error) {
-                // If there's an error (e.g. view not loaded yet or no data), set balance to 0
                 setConsolidatedBalance(0);
                 return;
             }
@@ -95,7 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }
 
-    // Sign out function
     async function signOut() {
         await supabase.auth.signOut();
         setUser(null);
@@ -103,7 +97,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setConsolidatedBalance(0);
     }
 
-    // Fetch session on mount and listen to changes
     useEffect(() => {
         supabase.auth.getSession().then((res: any) => {
             const session = res.data?.session || null;
@@ -132,7 +125,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
     }, []);
 
-    // Refresh consolidated balance whenever user/session state updates
     useEffect(() => {
         if (session?.user) {
             refreshConsolidatedBalance();

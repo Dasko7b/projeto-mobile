@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
+import { styles } from '../../styles/components/Loading.styles';
 
 interface LoadingProps {
     size?: 'small' | 'large';
@@ -13,12 +14,3 @@ export default function Loading({ size = 'large', color = '#2563eb' }: LoadingPr
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#fff',
-    },
-});

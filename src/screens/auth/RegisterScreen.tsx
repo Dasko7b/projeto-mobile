@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
     View,
     Text,
@@ -10,124 +10,27 @@ import {
     ActivityIndicator
 } from 'react-native';
 import { Flame, ArrowLeft } from 'lucide-react-native';
-import { supabase } from '../../services/supabase';
+import { useRegister } from '../../hooks/useRegister';
 import { styles } from '../../styles/auth/RegisterScreen.styles';
-import { useToast } from '../../components/Toast/Toast';
 
 export default function RegisterScreen({ navigation }: any) {
-    const { showToast } = useToast();
-    const [nome, setNome] = useState('');
-    const [email, setEmail] = useState('');
-    const [senha, setSenha] = useState('');
-    const [confirmarSenha, setConfirmarSenha] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    // Estados para erros
-    const [nomeError, setNomeError] = useState('');
-    const [emailError, setEmailError] = useState('');
-    const [senhaError, setSenhaError] = useState('');
-    const [confirmarSenhaError, setConfirmarSenhaError] = useState('');
-    const [generalError, setGeneralError] = useState('');
-
-    async function handleRegister() {
-        
-        setNomeError('');
-        setEmailError('');
-        setSenhaError('');
-        setConfirmarSenhaError('');
-        setGeneralError('');
-
-        let hasError = false;
-        let validationMessage = '';
-
-        if (!nome.trim()) {
-            const message = 'Por favor, preencha o seu nome completo.';
-            setNomeError(message);
-            validationMessage ||= message;
-            hasError = true;
-        }
-
-        if (!email.trim()) {
-            const message = 'Por favor, preencha o seu e-mail.';
-            setEmailError(message);
-            validationMessage ||= message;
-            hasError = true;
-        }
-
-        if (!senha) {
-            const message = 'Por favor, crie uma senha.';
-            setSenhaError(message);
-            validationMessage ||= message;
-            hasError = true;
-        } else if (senha.length < 6) {
-            const message = 'A senha deve ter pelo menos 6 caracteres.';
-            setSenhaError(message);
-            validationMessage ||= message;
-            hasError = true;
-        }
-
-        if (!confirmarSenha) {
-            const message = 'Por favor, confirme a sua senha.';
-            setConfirmarSenhaError(message);
-            validationMessage ||= message;
-            hasError = true;
-        } else if (senha !== confirmarSenha) {
-            const message = 'As senhas não coincidem.';
-            setConfirmarSenhaError(message);
-            validationMessage ||= message;
-            hasError = true;
-        }
-
-        if (hasError) {
-            showToast({
-                variant: 'warning',
-                title: 'Revise os campos',
-                message: validationMessage,
-            });
-            return;
-        }
-
-        setLoading(true);
-
-        try {
-            const { error } = await supabase.auth.signUp({
-                email: email.trim(),
-                password: senha,
-                options: {
-                    data: {
-                        nome: nome.trim(),
-                    }
-                }
-            });
-
-            if (error) {
-                setGeneralError(error.message);
-                showToast({
-                    variant: 'destructive',
-                    title: 'Erro ao cadastrar',
-                    message: error.message,
-                });
-                return;
-            }
-
-            showToast({
-                variant: 'success',
-                title: 'Cadastro realizado',
-                message: 'Sua conta foi criada com sucesso.',
-            });
-        } catch (err: any) {
-            const message = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
-            setGeneralError(message);
-            showToast({
-                variant: 'destructive',
-                title: 'Erro de conexão',
-                message,
-            });
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    }
+    const {
+        nome,
+        email,
+        senha,
+        confirmarSenha,
+        loading,
+        nomeError,
+        emailError,
+        senhaError,
+        confirmarSenhaError,
+        generalError,
+        handleNomeChange,
+        handleEmailChange,
+        handleSenhaChange,
+        handleConfirmarSenhaChange,
+        handleRegister,
+    } = useRegister();
 
     return (
         <KeyboardAvoidingView
@@ -169,10 +72,7 @@ export default function RegisterScreen({ navigation }: any) {
                                     nomeError ? styles.inputError : null
                                 ]}
                                 value={nome}
-                                onChangeText={(text) => {
-                                    setNome(text);
-                                    if (nomeError) setNomeError('');
-                                }}
+                                onChangeText={handleNomeChange}
                                 autoCapitalize="words"
                                 placeholderTextColor="#9ca3af"
                                 editable={!loading}
@@ -188,10 +88,7 @@ export default function RegisterScreen({ navigation }: any) {
                                     emailError ? styles.inputError : null
                                 ]}
                                 value={email}
-                                onChangeText={(text) => {
-                                    setEmail(text);
-                                    if (emailError) setEmailError('');
-                                }}
+                                onChangeText={handleEmailChange}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                                 placeholderTextColor="#9ca3af"
@@ -209,10 +106,7 @@ export default function RegisterScreen({ navigation }: any) {
                                     senhaError ? styles.inputError : null
                                 ]}
                                 value={senha}
-                                onChangeText={(text) => {
-                                    setSenha(text);
-                                    if (senhaError) setSenhaError('');
-                                }}
+                                onChangeText={handleSenhaChange}
                                 placeholderTextColor="#9ca3af"
                                 editable={!loading}
                             />
@@ -228,10 +122,7 @@ export default function RegisterScreen({ navigation }: any) {
                                     confirmarSenhaError ? styles.inputError : null
                                 ]}
                                 value={confirmarSenha}
-                                onChangeText={(text) => {
-                                    setConfirmarSenha(text);
-                                    if (confirmarSenhaError) setConfirmarSenhaError('');
-                                }}
+                                onChangeText={handleConfirmarSenhaChange}
                                 placeholderTextColor="#9ca3af"
                                 editable={!loading}
                             />

@@ -9,21 +9,13 @@ export default function LoginScreen({ navigation }: any) {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // Error States for Inline Feedback
+    // Estados para erros
     const [emailError, setEmailError] = useState('');
     const [passwordError, setPasswordError] = useState('');
     const [generalError, setGeneralError] = useState('');
 
-    function showAlert(title: string, message: string) {
-        if (Platform.OS === 'web') {
-            window.alert(`${title}: ${message}`);
-        } else {
-            Alert.alert(title, message);
-        }
-    }
-
     async function handleLogin() {
-        // Reset Errors
+
         setEmailError('');
         setPasswordError('');
         setGeneralError('');
@@ -43,6 +35,7 @@ export default function LoginScreen({ navigation }: any) {
         if (hasError) return;
 
         setLoading(true);
+
         try {
             const { error } = await supabase.auth.signInWithPassword({
                 email: email.trim(),

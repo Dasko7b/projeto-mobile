@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React from 'react';
 import {
     Animated,
     Alert,
@@ -7,541 +7,73 @@ import {
     TouchableOpacity,
     View,
     FlatList,
-    ImageBackground,
     Modal,
     ScrollView,
-    Share,
     TextInput,
     ActivityIndicator,
     RefreshControl,
-    Platform
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, Camera, CreditCard, DollarSign, Image as ImageIcon, Plus, ReceiptText, Share2, Trash2, UserPlus, X } from 'lucide-react-native';
-import { supabase } from '../../services/supabase';
-import { useAuth } from '../../context/AuthContext';
 import Loading from '../../components/Loading/Loading';
 import ExpenseCard from '../../components/ExpenseCard/ExpenseCard';
 import { styles } from '../../styles/groups/GroupDetailsScreen.styles';
-
-type GroupData = {
-    id: string;
-    title: string;
-    tutor: string;
-    color: string;
-    participants: number;
-};
-
-type Member = {
-    user_id: string;
-    users: {
-        id: string;
-        nome: string;
-        email: string;
-    };
-};
-
-type Expense = {
-    id: string;
-    descricao: string;
-    valor: number;
-    paid_by: string;
-    receipt_url: string | null;
-    created_at: string;
-    users?: {
-        nome: string;
-    };
-};
-
-type ReceiptImage = {
-    uri: string;
-    fileName?: string | null;
-};
+import { GroupData } from '../../services/api/groups.api';
+import { useGroupDetails } from '../../hooks/useGroupDetails';
 
 export default function GroupDetailsScreen({ route, navigation }: any) {
     const group = route.params?.group as GroupData;
-    const { user, refreshConsolidatedBalance } = useAuth();
+    const {
+        currentUser,
+        members,
+        expenses,
+        loading,
+        refreshing,
+        isExpenseModalVisible,
+        isPaymentModalVisible,
+        isHistoryModalVisible,
+        isInviteModalVisible,
+        expenseTitle,
+        expenseValue,
+        selectedPayerId,
+        receiptImage,
+        expenseSaving,
+        paymentValue,
+        paymentError,
+        paymentSaving,
+        selectedReceiverId,
+        modalTranslateY,
+        paymentModalTranslateY,
+        historyModalTranslateY,
+        inviteModalTranslateY,
+        calculatedBalances,
+        totalExpenses,
+        numberOfMembers,
+        myBalance,
+        myPaid,
+        setExpenseTitle,
+        setExpenseValue,
+        setSelectedPayerId,
+        setReceiptImage,
+        setPaymentValue,
+        setPaymentError,
+        setSelectedReceiverId,
+        handleRefresh,
+        handleChooseReceiptImage,
+        handleAddExpense,
+        handleCloseExpenseModal,
+        handleExpenseSubmit,
+        handleOpenPaymentModal,
+        handleClosePaymentModal,
+        handlePaymentSubmit,
+        handleOpenHistoryModal,
+        handleCloseHistoryModal,
+        handleOpenInviteModal,
+        handleCloseInviteModal,
+        handleShareInvite,
+        formatDate,
+    } = useGroupDetails(group);
 
-    if (!group || !user) {
-        return <Loading />;
-    }
-
-    const currentUser = user;
-
-    const [members, setMembers] = useState<Member[]>([]);
-    const [expenses, setExpenses] = useState<Expense[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-
-    // Modal States
-    const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
-    const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
-    const [isHistoryModalVisible, setIsHistoryModalVisible] = useState(false);
-    const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
-
-    // Expense Form States
-    const [expenseTitle, setExpenseTitle] = useState('');
-    const [expenseValue, setExpenseValue] = useState('');
-    const [selectedPayerId, setSelectedPayerId] = useState(currentUser.id);
-    const [receiptImage, setReceiptImage] = useState<ReceiptImage | null>(null);
-    const [expenseSaving, setExpenseSaving] = useState(false);
-
-    // Payment Form States
-    const [paymentValue, setPaymentValue] = useState('');
-    const [paymentError, setPaymentError] = useState('');
-    const [paymentSaving, setPaymentSaving] = useState(false);
-    const [selectedReceiverId, setSelectedReceiverId] = useState<string>('');
-
-    // Animations
-    const modalTranslateY = useRef(new Animated.Value(450)).current;
-    const paymentModalTranslateY = useRef(new Animated.Value(360)).current;
-    const historyModalTranslateY = useRef(new Animated.Value(620)).current;
-    const inviteModalTranslateY = useRef(new Animated.Value(360)).current;
-
-    // Load Data
-    async function loadGroupData() {
-        try {
-            // 1. Fetch group members
-            const { data: membersData, error: membersError } = await supabase
-                .from('group_members')
-                .select('user_id, users ( id, nome, email )')
-                .eq('group_id', group.id);
-
-            if (membersError) throw membersError;
-            
-            if (membersData) {
-                const formattedMembers: Member[] = membersData.map((m: any) => ({
-                    user_id: m.user_id,
-                    users: Array.isArray(m.users) ? m.users[0] : m.users
-                }));
-                setMembers(formattedMembers);
-            } else {
-                setMembers([]);
-            }
-
-            // 2. Fetch expenses
-            const { data: expensesData, error: expensesError } = await supabase
-                .from('expenses')
-                .select('*, users:paid_by ( nome )')
-                .eq('group_id', group.id)
-                .order('created_at', { ascending: false });
-
-            if (expensesError) {
-                // Fallback query if relationship naming is different
-                const { data: fallbackData, error: fallbackError } = await supabase
-                    .from('expenses')
-                    .select('*')
-                    .eq('group_id', group.id)
-                    .order('created_at', { ascending: false });
-                
-                if (fallbackError) throw fallbackError;
-                
-                // Fetch user profiles separately
-                const { data: usersData } = await supabase.from('users').select('id, nome');
-                const userMap = new Map(usersData?.map((u: any) => [u.id, u.nome]) || []);
-                
-                const mapped: Expense[] = (fallbackData || []).map((exp: any) => ({
-                    ...exp,
-                    valor: Number(exp.valor),
-                    users: { nome: userMap.get(exp.paid_by) || 'Membro' }
-                }));
-                setExpenses(mapped);
-            } else {
-                const mapped: Expense[] = (expensesData || []).map((exp: any) => ({
-                    ...exp,
-                    valor: Number(exp.valor)
-                }));
-                setExpenses(mapped);
-            }
-        } catch (err: any) {
-            console.error("Erro ao carregar dados do grupo:", err);
-            Alert.alert("Erro", "Não foi possível carregar as informações do grupo.");
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    }
-
-    useEffect(() => {
-        loadGroupData();
-    }, [group.id]);
-
-    const handleRefresh = () => {
-        setRefreshing(true);
-        loadGroupData();
-        refreshConsolidatedBalance();
-    };
-
-    // Calculate Balances
-    const realExpenses = expenses.filter(exp => !exp.descricao.startsWith('Liquidação'));
-    const totalExpenses = realExpenses.reduce((sum, exp) => sum + exp.valor, 0);
-    const numberOfMembers = members.length;
-    const sharePerMember = numberOfMembers > 0 ? totalExpenses / numberOfMembers : 0;
-
-    const realPaidPerMember: { [userId: string]: number } = {};
-    const settlementsPaid: { [userId: string]: number } = {};
-    const settlementsReceived: { [userId: string]: number } = {};
-
-    members.forEach(m => { 
-        realPaidPerMember[m.user_id] = 0;
-        settlementsPaid[m.user_id] = 0;
-        settlementsReceived[m.user_id] = 0;
-    });
-
-    expenses.forEach(exp => {
-        if (exp.descricao.startsWith('Liquidação')) {
-            const payer = exp.paid_by;
-            let receiver = '';
-            if (exp.descricao.startsWith('Liquidação: para ')) {
-                receiver = exp.descricao.replace('Liquidação: para ', '').trim();
-            }
-
-            if (settlementsPaid[payer] !== undefined) {
-                settlementsPaid[payer] += exp.valor;
-            }
-            if (receiver && settlementsReceived[receiver] !== undefined) {
-                settlementsReceived[receiver] += exp.valor;
-            }
-        } else {
-            if (realPaidPerMember[exp.paid_by] !== undefined) {
-                realPaidPerMember[exp.paid_by] += exp.valor;
-            }
-        }
-    });
-
-    const calculatedBalances = members.map(m => {
-        const realPaid = realPaidPerMember[m.user_id] || 0;
-        const sPaid = settlementsPaid[m.user_id] || 0;
-        const sReceived = settlementsReceived[m.user_id] || 0;
-        const balance = (realPaid - sharePerMember) + sPaid - sReceived;
-        return {
-            id: m.user_id,
-            name: m.users?.nome || 'Membro',
-            avatar: `https://i.pravatar.cc/150?u=${m.user_id}`,
-            paid: realPaid,
-            balance: balance
-        };
-    });
-
-    const myBalanceItem = calculatedBalances.find(b => b.id === currentUser.id);
-    const myBalance = myBalanceItem ? myBalanceItem.balance : 0;
-    const myPaid = myBalanceItem ? myBalanceItem.paid : 0;
-
-    // Image Picker Flow
-    async function pickReceiptFromCamera() {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-            Alert.alert('Permissão necessária', 'Autorize o acesso à câmera para fotografar o recibo.');
-            return;
-        }
-        const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            quality: 0.8,
-        });
-        if (!result.canceled && result.assets[0]) {
-            setReceiptImage({
-                uri: result.assets[0].uri,
-                fileName: result.assets[0].fileName,
-            });
-        }
-    }
-
-    async function pickReceiptFromGallery() {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-            Alert.alert('Permissão necessária', 'Autorize o acesso à galeria para anexar o recibo.');
-            return;
-        }
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            quality: 0.8,
-        });
-        if (!result.canceled && result.assets[0]) {
-            setReceiptImage({
-                uri: result.assets[0].uri,
-                fileName: result.assets[0].fileName,
-            });
-        }
-    }
-
-    function handleChooseReceiptImage() {
-        if (Platform.OS === 'web') {
-            pickReceiptFromGallery();
-        } else {
-            Alert.alert('Adicionar comprovante', 'Escolha como deseja anexar o recibo.', [
-                { text: 'Câmera', onPress: pickReceiptFromCamera },
-                { text: 'Galeria', onPress: pickReceiptFromGallery },
-                { text: 'Cancelar', style: 'cancel' },
-            ]);
-        }
-    }
-
-    // Upload Image to Supabase Storage
-    async function uploadReceiptImage(uri: string): Promise<string | null> {
-        try {
-            const response = await fetch(uri);
-            const blob = await response.blob();
-            
-            const fileExt = uri.split('.').pop() || 'jpg';
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-            const filePath = `receipts/${fileName}`;
-
-            // Upload
-            const { data, error } = await supabase.storage
-                .from('receipts')
-                .upload(filePath, blob, {
-                    contentType: 'image/jpeg'
-                });
-
-            if (error) throw error;
-
-            // Get Public URL
-            const { data: { publicUrl } } = supabase.storage
-                .from('receipts')
-                .getPublicUrl(filePath);
-
-            return publicUrl;
-        } catch (err: any) {
-            console.error("Erro no upload do comprovante:", err);
-            return null;
-        }
-    }
-
-    // Modal Actions
-    function handleAddExpense() {
-        setExpenseTitle('');
-        setExpenseValue('');
-        setSelectedPayerId(currentUser.id);
-        setReceiptImage(null);
-        setIsExpenseModalVisible(true);
-        Animated.timing(modalTranslateY, {
-            toValue: 0,
-            duration: 260,
-            useNativeDriver: true,
-        }).start();
-    }
-
-    function handleCloseExpenseModal() {
-        if (expenseSaving) return;
-        Animated.timing(modalTranslateY, {
-            toValue: 450,
-            duration: 220,
-            useNativeDriver: true,
-        }).start(() => {
-            setIsExpenseModalVisible(false);
-            setReceiptImage(null);
-        });
-    }
-
-    async function handleExpenseSubmit() {
-        if (!expenseTitle.trim()) {
-            Alert.alert("Erro", "Por favor, informe a descrição da despesa.");
-            return;
-        }
-
-        const normalizedVal = expenseValue.replace(',', '.');
-        const parsedVal = Number(normalizedVal);
-        if (!parsedVal || parsedVal <= 0) {
-            Alert.alert("Erro", "Por favor, informe um valor de despesa válido.");
-            return;
-        }
-
-        setExpenseSaving(true);
-        try {
-            let receiptUrl = null;
-            if (receiptImage) {
-                receiptUrl = await uploadReceiptImage(receiptImage.uri);
-                if (!receiptUrl) {
-                    const saveWithoutReceipt = await new Promise((resolve) => {
-                        if (Platform.OS === 'web') {
-                            const confirmSave = window.confirm("Erro de Upload: Não foi possível enviar o recibo. Deseja salvar a despesa assim mesmo?");
-                            resolve(confirmSave);
-                        } else {
-                            Alert.alert(
-                                "Erro de Upload",
-                                "Não foi possível enviar o recibo. Deseja salvar a despesa assim mesmo?",
-                                [
-                                    { text: "Cancelar", onPress: () => resolve(false), style: "cancel" },
-                                    { text: "Sim, salvar sem recibo", onPress: () => resolve(true) }
-                                ]
-                            );
-                        }
-                    });
-                    if (!saveWithoutReceipt) {
-                        setExpenseSaving(false);
-                        return;
-                    }
-                }
-            }
-
-            // Insert Expense
-            const { error } = await supabase
-                .from('expenses')
-                .insert({
-                    group_id: group.id,
-                    paid_by: selectedPayerId,
-                    valor: parsedVal,
-                    descricao: expenseTitle.trim(),
-                    receipt_url: receiptUrl
-                });
-
-            if (error) throw error;
-
-            handleCloseExpenseModal();
-            loadGroupData();
-            refreshConsolidatedBalance();
-        } catch (err: any) {
-            console.error("Erro ao salvar despesa:", err);
-            Alert.alert("Erro", "Ocorreu um erro ao salvar a despesa.");
-        } finally {
-            setExpenseSaving(false);
-        }
-    }
-
-    // Payment/Settle Flow
-    function handleOpenPaymentModal() {
-        setPaymentValue('');
-        setPaymentError('');
-        const otherMembers = members.filter(m => m.user_id !== currentUser.id);
-        if (otherMembers.length > 0) {
-            setSelectedReceiverId(otherMembers[0].user_id);
-        } else {
-            setSelectedReceiverId('');
-        }
-        setIsPaymentModalVisible(true);
-        Animated.timing(paymentModalTranslateY, {
-            toValue: 0,
-            duration: 260,
-            useNativeDriver: true,
-        }).start();
-    }
-
-    function handleClosePaymentModal() {
-        if (paymentSaving) return;
-        Animated.timing(paymentModalTranslateY, {
-            toValue: 360,
-            duration: 220,
-            useNativeDriver: true,
-        }).start(() => {
-            setIsPaymentModalVisible(false);
-            setPaymentError('');
-        });
-    }
-
-    async function handlePaymentSubmit() {
-        const normalizedValue = paymentValue.replace(',', '.');
-        const paidValue = Number(normalizedValue);
-
-        if (!paidValue || paidValue <= 0) {
-            setPaymentError('Informe um valor válido.');
-            return;
-        }
-
-        if (!selectedReceiverId) {
-            setPaymentError('Selecione quem recebeu o pagamento.');
-            return;
-        }
-
-        const maxOwed = myBalance < 0 ? Math.abs(myBalance) : 0;
-        if (maxOwed > 0 && paidValue > maxOwed + 0.01) {
-            setPaymentError(`Você deve no máximo R$ ${maxOwed.toFixed(2)}.`);
-            return;
-        }
-
-        setPaymentSaving(true);
-        try {
-            // Settle payment is recorded as an expense with special description containing the receiver ID
-            const { error } = await supabase
-                .from('expenses')
-                .insert({
-                    group_id: group.id,
-                    paid_by: currentUser.id,
-                    valor: paidValue,
-                    descricao: `Liquidação: para ${selectedReceiverId}`,
-                    receipt_url: null
-                });
-
-            if (error) throw error;
-
-            handleClosePaymentModal();
-            loadGroupData();
-            refreshConsolidatedBalance();
-            if (Platform.OS === 'web') {
-                window.alert("Pagamento de liquidação registrado com sucesso!");
-            } else {
-                Alert.alert("Sucesso", "Pagamento de liquidação registrado com sucesso!");
-            }
-        } catch (err: any) {
-            console.error("Erro ao registrar liquidação:", err);
-            if (Platform.OS === 'web') {
-                window.alert("Não foi possível registrar o pagamento.");
-            } else {
-                Alert.alert("Erro", "Não foi possível registrar o pagamento.");
-            }
-        } finally {
-            setPaymentSaving(false);
-        }
-    }
-
-    // History Modal
-    function handleOpenHistoryModal() {
-        setIsHistoryModalVisible(true);
-        Animated.timing(historyModalTranslateY, {
-            toValue: 0,
-            duration: 260,
-            useNativeDriver: true,
-        }).start();
-    }
-
-    function handleCloseHistoryModal() {
-        Animated.timing(historyModalTranslateY, {
-            toValue: 620,
-            duration: 220,
-            useNativeDriver: true,
-        }).start(() => setIsHistoryModalVisible(false));
-    }
-
-    // Share / Invite Modal
-    function handleOpenInviteModal() {
-        setIsInviteModalVisible(true);
-        Animated.timing(inviteModalTranslateY, {
-            toValue: 0,
-            duration: 260,
-            useNativeDriver: true,
-        }).start();
-    }
-
-    function handleCloseInviteModal() {
-        Animated.timing(inviteModalTranslateY, {
-            toValue: 360,
-            duration: 220,
-            useNativeDriver: true,
-        }).start(() => setIsInviteModalVisible(false));
-    }
-
-    async function handleShareInvite() {
-        try {
-            await Share.share({
-                message: `Entre no meu grupo "${group.title}" no FechaConta usando o código de convite abaixo:\n\n${group.id}\n\nAbra o app e insira o código em "Entrar em grupo".`,
-            });
-        } catch (err) {
-            console.error("Erro ao compartilhar convite:", err);
-        }
-    }
-
-    function formatDate(dateString: string) {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: 'short',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    }
-
-    if (loading) {
+    if (!group || !currentUser || loading) {
         return <Loading />;
     }
 

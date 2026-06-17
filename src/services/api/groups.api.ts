@@ -8,6 +8,32 @@ export type GroupData = {
     participants: number;
 };
 
+export type Member = {
+    user_id: string;
+    users: {
+        id: string;
+        nome: string;
+        email: string;
+    };
+};
+
+export type Expense = {
+    id: string;
+    descricao: string;
+    valor: number;
+    paid_by: string;
+    receipt_url: string | null;
+    created_at: string;
+    users?: {
+        nome: string;
+    };
+};
+
+export type GroupDetailsData = {
+    members: Member[];
+    expenses: Expense[];
+};
+
 export type JoinGroupResult =
     | {
         status: 'joined';
@@ -54,6 +80,117 @@ export async function getGroups(): Promise<GroupData[]> {
             color: getGroupColor(group.id),
             participants: group.group_members?.length || 0,
         };
+    });
+}
+
+export async function getGroupDetails(groupId: string): Promise<GroupDetailsData> {
+    const { data: membersData, error: membersError } = await supabase
+        .from('group_members')
+        .select('user_id, users ( id, nome, email )')
+        .eq('group_id', groupId);
+
+    if (membersError) throw membersError;
+
+    const members: Member[] = (membersData || []).map((member: any) => ({
+        user_id: member.user_id,
+        users: Array.isArray(member.users) ? member.users[0] : member.users,
+    }));
+
+    const { data: expensesData, error: expensesError } = await supabase
+        .from('expenses')
+        .select('*, users:paid_by ( nome )')
+        .eq('group_id', groupId)
+        .order('created_at', { ascending: false });
+
+    if (!expensesError) {
+        return {
+            members,
+            expenses: (expensesData || []).map((expense: any) => ({
+                ...expense,
+                valor: Number(expense.valor),
+            })),
+        };
+    }
+
+    const { data: fallbackData, error: fallbackError } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('group_id', groupId)
+        .order('created_at', { ascending: false });
+
+    if (fallbackError) throw fallbackError;
+
+    const { data: usersData } = await supabase
+        .from('users')
+        .select('id, nome');
+
+    const userMap = new Map((usersData || []).map((user: any) => [user.id, user.nome]));
+
+    return {
+        members,
+        expenses: (fallbackData || []).map((expense: any) => ({
+            ...expense,
+            valor: Number(expense.valor),
+            users: { nome: userMap.get(expense.paid_by) || 'Membro' },
+        })),
+    };
+}
+
+export async function uploadReceiptImage(uri: string): Promise<string | null> {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    const fileExt = uri.split('.').pop() || 'jpg';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+    const filePath = `receipts/${fileName}`;
+
+    const { error } = await supabase.storage
+        .from('receipts')
+        .upload(filePath, blob, {
+            contentType: 'image/jpeg',
+        });
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabase.storage
+        .from('receipts')
+        .getPublicUrl(filePath);
+
+    return publicUrl;
+}
+
+export async function createExpense(params: {
+    groupId: string;
+    paidBy: string;
+    value: number;
+    description: string;
+    receiptUrl?: string | null;
+}) {
+    const { error } = await supabase
+        .from('expenses')
+        .insert({
+            group_id: params.groupId,
+            paid_by: params.paidBy,
+            valor: params.value,
+            descricao: params.description,
+            receipt_url: params.receiptUrl ?? null,
+        });
+
+    if (error) throw error;
+}
+
+export async function settleGroupPayment(params: {
+    groupId: string;
+    payerId: string;
+    receiverId: string;
+    value: number;
+}) {
+    return createExpense({
+        groupId: params.groupId,
+        paidBy: params.payerId,
+        value: params.value,
+        description: `Liquidação: para ${params.receiverId}`,
+        receiptUrl: null,
     });
 }
 

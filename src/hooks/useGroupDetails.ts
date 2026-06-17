@@ -131,6 +131,7 @@ export function useGroupDetails(group?: GroupData) {
         }
     });
 
+    //calcular o valor de cada membro
     const calculatedBalances: CalculatedBalance[] = members.map(member => {
         const realPaid = realPaidPerMember[member.user_id] || 0;
         const settlementPaid = settlementsPaid[member.user_id] || 0;

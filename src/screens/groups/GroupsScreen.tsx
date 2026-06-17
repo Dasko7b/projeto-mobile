@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React from 'react';
 import {
     Animated,
     FlatList,
@@ -7,215 +7,32 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    Alert,
     ActivityIndicator,
 } from 'react-native';
 import { Flame, LogIn, LayersPlus, Link, X, UsersRound } from 'lucide-react-native';
-import { supabase } from '../../services/supabase';
-import { useAuth } from '../../context/AuthContext';
 import GroupCard from '../../components/GroupCard/GroupCard';
 import EmptyState from '../../components/EmptyState/EmptyState';
 import Loading from '../../components/Loading/Loading';
 import { styles } from '../../styles/groups/GroupsScreen.styles';
-import { useToast } from '../../components/Toast/Toast';
-
-type GroupData = {
-    id: string;
-    title: string;
-    tutor: string;
-    color: string;
-    participants: number;
-};
-
-const PASTEL_COLORS = ['#AEE7F8', '#F2F56B', '#9EF0A8', '#F8AEEC', '#F8B6AE'];
+import { useGroups } from '../../hooks/useGroups';
 
 export default function GroupsScreen({ navigation }: any) {
-    const { user, refreshConsolidatedBalance } = useAuth();
-    const { showToast } = useToast();
-    const [groups, setGroups] = useState<GroupData[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    
-    const [isJoinModalVisible, setIsJoinModalVisible] = useState(false);
-    const [groupLink, setGroupLink] = useState('');
-    const [joinLoading, setJoinLoading] = useState(false);
-    
-    const joinModalTranslateY = useRef(new Animated.Value(360)).current;
-
-    async function loadGroups() {
-        if (!user) return;
-        try {
-
-            const { data, error } = await supabase
-                .from('groups')
-                .select(`
-                    id,
-                    nome,
-                    group_members (
-                        user_id,
-                        users ( nome )
-                    )
-                `);
-
-            if (error) throw error;
-
-            if (data) {
-                const mapped: GroupData[] = data.map((g: any) => {
-                    
-                    const tutorName = g.group_members?.[0]?.users?.nome || 'Membro';
-                    
-                    const hash = g.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
-                    const color = PASTEL_COLORS[Math.abs(hash) % PASTEL_COLORS.length];
-
-                    return {
-                        id: g.id,
-                        title: g.nome,
-                        tutor: tutorName,
-                        color: color,
-                        participants: g.group_members?.length || 0,
-                    };
-                });
-                setGroups(mapped);
-            }
-        } catch (err: any) {
-            console.error("Erro ao carregar grupos:", err);
-            Alert.alert("Erro", "Não foi possível carregar os seus grupos.");
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    }
-
-    useEffect(() => {
-        loadGroups();
-
-        const unsubscribe = navigation.addListener('focus', () => {
-            loadGroups();
-            refreshConsolidatedBalance();
-        });
-
-        return unsubscribe;
-    }, [navigation, user?.id]);
-
-    const handleRefresh = () => {
-        setRefreshing(true);
-        loadGroups();
-        refreshConsolidatedBalance();
-    };
-
-    function handleCreateGroup() {
-        navigation.navigate('CreateGroup');
-    }
-
-    function handleGroupPress(group: GroupData) {
-        navigation.navigate('GroupDetails', { group });
-    }
-
-    function handleOpenJoinModal() {
-        setIsJoinModalVisible(true);
-        Animated.timing(joinModalTranslateY, {
-            toValue: 0,
-            duration: 260,
-            useNativeDriver: true,
-        }).start();
-    }
-
-    function handleCloseJoinModal() {
-        Animated.timing(joinModalTranslateY, {
-            toValue: 360,
-            duration: 220,
-            useNativeDriver: true,
-        }).start(() => {
-            setIsJoinModalVisible(false);
-            setGroupLink('');
-            setJoinLoading(false);
-        });
-    }
-
-    async function handleJoinGroupSubmit() {
-        const inviteCode = groupLink.trim();
-        if (!inviteCode) {
-            showToast({
-                variant: 'warning',
-                title: 'Informe o código',
-                message: 'Por favor, digite o código ou cole o link do grupo.',
-            });
-            return;
-        }
-
-        
-        let cleanedId = inviteCode;
-        if (inviteCode.includes('://')) {
-            const parts = inviteCode.split('/');
-            cleanedId = parts[parts.length - 1];
-        }
-
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-        if (!uuidRegex.test(cleanedId)) {
-            showToast({
-                variant: 'warning',
-                title: 'Código inválido',
-                message: 'O código do grupo deve ser um identificador UUID válido.',
-            });
-            return;
-        }
-
-        setJoinLoading(true);
-        try {
-            
-            const { error: joinError } = await supabase
-                .from('group_members')
-                .insert({
-                    group_id: cleanedId,
-                    user_id: user?.id
-                });
-
-            if (joinError) {
-                if (joinError.code === '23505') { 
-                    showToast({
-                        variant: 'warning',
-                        title: 'Você já participa',
-                        message: 'Você já faz parte deste grupo.',
-                    });
-                } else if (joinError.code === '23503') {
-                    showToast({
-                        variant: 'destructive',
-                        title: 'Grupo não encontrado',
-                        message: 'Verifique o código e tente novamente.',
-                    });
-                } else {
-                    throw joinError;
-                }
-            } else {
-               
-                const { data: groupData } = await supabase
-                    .from('groups')
-                    .select('nome')
-                    .eq('id', cleanedId)
-                    .single();
-
-                const groupName = groupData?.nome || "Novo Racha";
-
-                showToast({
-                    variant: 'success',
-                    title: 'Você entrou no grupo',
-                    message: `Agora você participa de "${groupName}".`,
-                });
-                handleCloseJoinModal();
-                loadGroups();
-                refreshConsolidatedBalance();
-            }
-        } catch (err: any) {
-            console.error("Erro ao entrar no grupo:", err);
-            showToast({
-                variant: 'destructive',
-                title: 'Erro ao entrar',
-                message: 'Ocorreu um erro ao tentar se associar a este grupo.',
-            });
-        } finally {
-            setJoinLoading(false);
-        }
-    }
+    const {
+        groups,
+        loading,
+        refreshing,
+        isJoinModalVisible,
+        groupLink,
+        joinLoading,
+        joinModalTranslateY,
+        setGroupLink,
+        handleRefresh,
+        handleCreateGroup,
+        handleGroupPress,
+        handleOpenJoinModal,
+        handleCloseJoinModal,
+        handleJoinGroupSubmit,
+    } = useGroups(navigation);
 
     if (loading) {
         return <Loading />;

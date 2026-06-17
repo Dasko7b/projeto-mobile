@@ -1,45 +1,21 @@
+import React from 'react';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Flame } from 'lucide-react-native';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { useAuth } from '../../context/AuthContext';
-import { useState } from 'react';
-import { supabase } from '../../services/supabase';
+import { useLogin } from '../../hooks/useLogin';
+import { styles } from '../../styles/auth/LoginScreen.styles';
 
 export default function LoginScreen({ navigation }: any) {
-    const { setUser } = useAuth();
-
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    async function handleLogin() {
-        if (!email || !password) {
-            Alert.alert("Erro:", "Por favor, preencha todos os campos.");
-            return;
-        }
-
-        setLoading(true);
-        
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email: email,
-            password: password,
-        });
-
-        if (error) {
-            Alert.alert("Erro ao entrar:", error.message);
-            setLoading(false);
-            return;
-        }
-
-        if (data.user) {
-            setUser({
-                name: data.user.user_metadata?.name || 'Utilizador',
-                email: data.user.email || '',
-                avatarUrl: data.user.user_metadata?.avatarUrl || 'https://i.pravatar.cc/150',
-            });
-        }
-        
-        setLoading(false);
-    }
+    const {
+        email,
+        password,
+        loading,
+        emailError,
+        passwordError,
+        generalError,
+        handleEmailChange,
+        handlePasswordChange,
+        handleLogin,
+    } = useLogin();
 
     function handleRegister() {
         navigation.navigate('Register');
@@ -47,83 +23,74 @@ export default function LoginScreen({ navigation }: any) {
 
     return (
         <View style={styles.container}>
-
-            <View style={styles.imageBackground}>
-                <Flame size={80} color="#ff0000" fill="#ff0000" />
+            <View style={styles.logoContainer}>
+                <Flame size={72} color="#2563eb" fill="#2563eb" />
+                <Text style={styles.title}>FechaConta</Text>
+                <Text style={styles.subtitle}>Rache, controle e pague contas de forma simples.</Text>
             </View>
 
-            <Text style={styles.title}>FechaConta</Text>
+            <View style={styles.form}>
+                {generalError ? (
+                    <View style={styles.errorBanner}>
+                        <Text style={styles.errorBannerText}>{generalError}</Text>
+                    </View>
+                ) : null}
 
-            <TextInput
-                placeholder="Email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                style={styles.input}
-            />
+                <View style={styles.inputGroup}>
+                    <TextInput
+                        placeholder="E-mail"
+                        value={email}
+                        onChangeText={handleEmailChange}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        style={[
+                            styles.input,
+                            emailError ? styles.inputError : null
+                        ]}
+                        placeholderTextColor="#9ca3af"
+                        editable={!loading}
+                    />
+                    {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+                </View>
 
-            <TextInput
-                placeholder="Senha"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                style={styles.input}
-            />
+                <View style={styles.inputGroup}>
+                    <TextInput
+                        placeholder="Senha"
+                        value={password}
+                        onChangeText={handlePasswordChange}
+                        secureTextEntry
+                        style={[
+                            styles.input,
+                            passwordError ? styles.inputError : null
+                        ]}
+                        placeholderTextColor="#9ca3af"
+                        editable={!loading}
+                    />
+                    {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+                </View>
 
-            <TouchableOpacity style={styles.button} onPress={() => handleLogin()}>
-                <Text style={styles.buttonText}>{loading ? "Carregando..." : "Entrar"}</Text>
-            </TouchableOpacity>
+                <TouchableOpacity 
+                    style={styles.button} 
+                    onPress={handleLogin}
+                    disabled={loading}
+                >
+                    {loading ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <Text style={styles.buttonText}>Entrar</Text>
+                    )}
+                </TouchableOpacity>
 
-            <TouchableOpacity
-                style={{ marginTop: 20, padding: 10, alignItems: 'center' }}
-                onPress={() => handleRegister()}
-            >
-                <Text style={{ color: '#666', fontSize: 14 }}>
-                    Não tem uma conta? <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>Cadastre-se</Text>
-                </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.registerLink}
+                    onPress={handleRegister}
+                    disabled={loading}
+                >
+                    <Text style={styles.registerLinkText}>
+                        Não tem uma conta? <Text style={styles.registerHighlight}>Cadastre-se</Text>
+                    </Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        padding: 24,
-        backgroundColor: '#ffffff',
-    },
-
-    title: {
-        marginBottom: 32,
-        textAlign: 'center',
-        fontFamily: 'Inter_700Bold',
-        fontSize: 38,
-        color: '#112332'
-    },
-
-    input: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 8,
-        padding: 14,
-        marginBottom: 16,
-    },
-
-    button: {
-        backgroundColor: '#000',
-        padding: 16,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-
-    buttonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-    },
-
-    imageBackground: {
-        margin: 'auto',
-        marginVertical: 0,
-    },
-});

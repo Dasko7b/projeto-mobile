@@ -6,6 +6,7 @@ import { RootNavigator } from './src/navigations/RootNavigator';
 import { isSupabaseConfigured } from './src/services/supabase';
 import { ShieldAlert } from 'lucide-react-native';
 import Loading from './src/components/Loading/Loading';
+import { ToastProvider } from './src/components/Toast/Toast';
 
 function UnconfiguredScreen() {
     return (
@@ -42,7 +43,9 @@ export default function App() {
 
     return (
         <AuthProvider>
-            <RootNavigator />
+            <ToastProvider>
+                <RootNavigator />
+            </ToastProvider>
         </AuthProvider>
     );
 }

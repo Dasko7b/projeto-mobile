@@ -1,6 +1,5 @@
-
+import React from 'react';
 import { Text, View, Image, TouchableOpacity } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { styles } from '../../styles/components/Header.styles';
 
 export default function Header() {

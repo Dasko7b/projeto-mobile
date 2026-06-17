@@ -1,6 +1,7 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Users, User, ReceiptText } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GroupStack } from "./GroupStack";
 import ProfileScreen from "../screens/profile/ProfileScreen";
 import ActivityScreen from "../screens/activity/ActivityScreen";
@@ -8,6 +9,9 @@ import ActivityScreen from "../screens/activity/ActivityScreen";
 const Tab = createBottomTabNavigator();
 
 export function AppTabs() {
+    const insets = useSafeAreaInsets();
+    const bottomInset = Math.max(insets.bottom, 8);
+
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
@@ -29,8 +33,8 @@ export function AppTabs() {
                     borderTopWidth: 1,
                     borderTopColor: "#e5e7eb",
                     backgroundColor: "#ffffff",
-                    height: 60,
-                    paddingBottom: 8,
+                    height: 52 + bottomInset,
+                    paddingBottom: bottomInset,
                     paddingTop: 8,
                 }
             })}

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Flame } from 'lucide-react-native';
 import { supabase } from '../../services/supabase';
 import { styles } from '../../styles/auth/LoginScreen.styles';
+import { useToast } from '../../components/Toast/Toast';
 
 export default function LoginScreen({ navigation }: any) {
+    const { showToast } = useToast();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -44,17 +46,38 @@ export default function LoginScreen({ navigation }: any) {
 
             if (error) {
                 const errMsg = error.message.toLowerCase();
+                let message = error.message;
+
                 if (errMsg.includes('invalid login credentials') || errMsg.includes('invalid credentials')) {
-                    setGeneralError('E-mail ou senha incorretos.');
+                    message = 'E-mail ou senha incorretos.';
                 } else if (errMsg.includes('email not confirmed')) {
-                    setGeneralError('O e-mail ainda não foi confirmado no Supabase. Verifique sua caixa de entrada.');
-                } else {
-                    setGeneralError(error.message);
+                    message = 'O e-mail ainda não foi confirmado no Supabase. Verifique sua caixa de entrada.';
                 }
+
+                setGeneralError(message);
+                showToast({
+                    variant: 'destructive',
+                    title: 'Erro ao entrar',
+                    message,
+                });
+                return;
             }
+
+            showToast({
+                variant: 'success',
+                title: 'Login realizado',
+                message: 'Bem-vindo de volta ao FechaConta.',
+            });
+            
         } catch (err: any) {
             console.error(err);
-            setGeneralError('Não foi possível conectar ao servidor. Verifique sua conexão.');
+            const message = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
+            setGeneralError(message);
+            showToast({
+                variant: 'destructive',
+                title: 'Erro de conexão',
+                message,
+            });
         } finally {
             setLoading(false);
         }

@@ -7,42 +7,30 @@ import {
     KeyboardAvoidingView,
     ScrollView,
     Platform,
-    Alert,
     ActivityIndicator
 } from 'react-native';
 import { Flame, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '../../services/supabase';
 import { styles } from '../../styles/auth/RegisterScreen.styles';
+import { useToast } from '../../components/Toast/Toast';
 
 export default function RegisterScreen({ navigation }: any) {
+    const { showToast } = useToast();
     const [nome, setNome] = useState('');
     const [email, setEmail] = useState('');
     const [senha, setSenha] = useState('');
     const [confirmarSenha, setConfirmarSenha] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // Inline Error States
+    // Estados para erros
     const [nomeError, setNomeError] = useState('');
     const [emailError, setEmailError] = useState('');
     const [senhaError, setSenhaError] = useState('');
     const [confirmarSenhaError, setConfirmarSenhaError] = useState('');
     const [generalError, setGeneralError] = useState('');
 
-    function showAlert(title: string, message: string, onPress?: () => void) {
-        if (Platform.OS === 'web') {
-            window.alert(`${title}: ${message}`);
-            if (onPress) onPress();
-        } else {
-            Alert.alert(
-                title, 
-                message, 
-                onPress ? [{ text: "OK", onPress }] : undefined
-            );
-        }
-    }
-
     async function handleRegister() {
-        // Reset Error States
+        
         setNomeError('');
         setEmailError('');
         setSenhaError('');
@@ -50,38 +38,59 @@ export default function RegisterScreen({ navigation }: any) {
         setGeneralError('');
 
         let hasError = false;
+        let validationMessage = '';
 
         if (!nome.trim()) {
-            setNomeError('Por favor, preencha o seu nome completo.');
+            const message = 'Por favor, preencha o seu nome completo.';
+            setNomeError(message);
+            validationMessage ||= message;
             hasError = true;
         }
 
         if (!email.trim()) {
-            setEmailError('Por favor, preencha o seu e-mail.');
+            const message = 'Por favor, preencha o seu e-mail.';
+            setEmailError(message);
+            validationMessage ||= message;
             hasError = true;
         }
 
         if (!senha) {
-            setSenhaError('Por favor, crie uma senha.');
+            const message = 'Por favor, crie uma senha.';
+            setSenhaError(message);
+            validationMessage ||= message;
             hasError = true;
         } else if (senha.length < 6) {
-            setSenhaError('A senha deve ter pelo menos 6 caracteres.');
+            const message = 'A senha deve ter pelo menos 6 caracteres.';
+            setSenhaError(message);
+            validationMessage ||= message;
             hasError = true;
         }
 
         if (!confirmarSenha) {
-            setConfirmarSenhaError('Por favor, confirme a sua senha.');
+            const message = 'Por favor, confirme a sua senha.';
+            setConfirmarSenhaError(message);
+            validationMessage ||= message;
             hasError = true;
         } else if (senha !== confirmarSenha) {
-            setConfirmarSenhaError('As senhas não coincidem.');
+            const message = 'As senhas não coincidem.';
+            setConfirmarSenhaError(message);
+            validationMessage ||= message;
             hasError = true;
         }
 
-        if (hasError) return;
+        if (hasError) {
+            showToast({
+                variant: 'warning',
+                title: 'Revise os campos',
+                message: validationMessage,
+            });
+            return;
+        }
 
         setLoading(true);
+
         try {
-            const { data, error } = await supabase.auth.signUp({
+            const { error } = await supabase.auth.signUp({
                 email: email.trim(),
                 password: senha,
                 options: {
@@ -93,16 +102,27 @@ export default function RegisterScreen({ navigation }: any) {
 
             if (error) {
                 setGeneralError(error.message);
+                showToast({
+                    variant: 'destructive',
+                    title: 'Erro ao cadastrar',
+                    message: error.message,
+                });
                 return;
             }
 
-            showAlert(
-                "Sucesso", 
-                "Conta cadastrada com sucesso! Caso não consiga fazer login de imediato, verifique se o e-mail de confirmação é obrigatório na aba Authentication -> Providers do console do seu Supabase.",
-                () => navigation.navigate('Login')
-            );
+            showToast({
+                variant: 'success',
+                title: 'Cadastro realizado',
+                message: 'Sua conta foi criada com sucesso.',
+            });
         } catch (err: any) {
-            setGeneralError('Não foi possível conectar ao servidor. Verifique sua conexão.');
+            const message = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
+            setGeneralError(message);
+            showToast({
+                variant: 'destructive',
+                title: 'Erro de conexão',
+                message,
+            });
             console.error(err);
         } finally {
             setLoading(false);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
     ArrowLeft } from 'lucide-react-native';
 import { View,
@@ -7,86 +7,27 @@ import { View,
     TouchableOpacity,
     ActivityIndicator,
 } from 'react-native';
-import { supabase } from '../../services/supabase';
-import { useAuth } from '../../context/AuthContext';
+import { useCreateGroup } from '../../hooks/useCreateGroup';
 import { styles } from '../../styles/groups/createGroupForm.styles';
-import { useToast } from '../../components/Toast/Toast';
 
 export default function CreateGroupScreen({ navigation }: any) {
-    const { user, refreshConsolidatedBalance } = useAuth();
-    const { showToast } = useToast();
-    const [nome, setNome] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('Casa');
-    const [loading, setLoading] = useState(false);
-
-    const categories = [
-        'Casa',
-        'Viagem',
-        'Festa',
-        'Faculdade',
-        'Mercado',
-    ];
-
-    async function handleCreateGroup() {
-        if (!nome.trim()) {
-            showToast({
-                variant: 'warning',
-                title: 'Nome obrigatório',
-                message: 'Por favor, digite o nome do Racha.',
-            });
-            return;
-        }
-
-        if (!user) {
-            showToast({
-                variant: 'destructive',
-                title: 'Sessão inválida',
-                message: 'Usuário não autenticado.',
-            });
-            return;
-        }
-
-        setLoading(true);
-        try {
-            
-            const { data: groupData, error: groupError } = await supabase
-                .rpc('create_group_with_member', {
-                    group_name: nome.trim(),
-                    user_id: user.id
-                });
-
-            if (groupError) throw groupError;
-
-            if (groupData) {
-
-                await refreshConsolidatedBalance();
-                showToast({
-                    variant: 'success',
-                    title: 'Racha criado',
-                    message: 'Seu grupo foi criado com sucesso.',
-                });
-                setTimeout(() => {
-                    navigation.goBack();
-                }, 700);
-            }
-        } catch (error: any) {
-            console.error("Erro ao criar grupo:", error);
-            showToast({
-                variant: 'destructive',
-                title: 'Erro ao criar grupo',
-                message: error.message || 'Erro desconhecido.',
-            });
-        } finally {
-            setLoading(false);
-        }
-    }
+    const {
+        categories,
+        nome,
+        selectedCategory,
+        loading,
+        setNome,
+        setSelectedCategory,
+        handleCreateGroup,
+        handleGoBack,
+    } = useCreateGroup(navigation);
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity 
                     style={styles.backButton} 
-                    onPress={() => navigation.goBack()}
+                    onPress={handleGoBack}
                     disabled={loading}
                 >
                     <ArrowLeft size={22} color="#112332" />

@@ -83,6 +83,18 @@ export async function getGroups(): Promise<GroupData[]> {
     });
 }
 
+export async function createGroupWithMember(groupName: string, userId: string) {
+    const { data, error } = await supabase
+        .rpc('create_group_with_member', {
+            group_name: groupName.trim(),
+            user_id: userId,
+        });
+
+    if (error) throw error;
+
+    return data;
+}
+
 export async function getGroupDetails(groupId: string): Promise<GroupDetailsData> {
     const { data: membersData, error: membersError } = await supabase
         .from('group_members')

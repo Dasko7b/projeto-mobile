@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
     Bell,
     ChevronRight,
@@ -17,222 +17,57 @@ import {
     TouchableOpacity,
     View,
     RefreshControl,
-    Alert,
     ActivityIndicator,
-    Platform,
     Modal,
     TextInput,
     Switch
 } from 'react-native';
-import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../services/supabase';
+import { useProfile } from '../../hooks/useProfile';
 import { styles } from '../../styles/profile/ProfileScreen.styles';
 
 export default function ProfileScreen({ navigation }: any) {
-    const { user, signOut, consolidatedBalance, refreshConsolidatedBalance, fetchUserProfile, session } = useAuth();
+    const {
+        currentUser,
+        consolidatedBalance,
+        stats,
+        loadingStats,
+        refreshing,
+        isEditModalVisible,
+        editName,
+        savingProfile,
+        isPaymentsModalVisible,
+        pixKey,
+        savingPayments,
+        isNotificationsModalVisible,
+        emailNotifications,
+        pushNotifications,
+        isSecurityModalVisible,
+        newPassword,
+        confirmPassword,
+        savingSecurity,
+        balanceColor,
+        setIsEditModalVisible,
+        setEditName,
+        setIsPaymentsModalVisible,
+        setPixKey,
+        setIsNotificationsModalVisible,
+        setEmailNotifications,
+        setPushNotifications,
+        setIsSecurityModalVisible,
+        setNewPassword,
+        setConfirmPassword,
+        handleRefresh,
+        openEditProfileModal,
+        handleLogout,
+        handleSaveProfile,
+        handleSaveSecurity,
+        handleSavePayments,
+    } = useProfile(navigation);
     
-    if (!user) {
+    if (!currentUser) {
         return null;
     }
 
-    const currentUser = user;
-
-    const [stats, setStats] = useState({ groupsCount: 0, totalPaid: 0 });
-    const [loadingStats, setLoadingStats] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-
-    // Modals States
-    const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-    const [editName, setEditName] = useState(currentUser.nome);
-    const [savingProfile, setSavingProfile] = useState(false);
-
-    const [isPaymentsModalVisible, setIsPaymentsModalVisible] = useState(false);
-    const [pixKey, setPixKey] = useState('');
-    const [savingPayments, setSavingPayments] = useState(false);
-
-    const [isNotificationsModalVisible, setIsNotificationsModalVisible] = useState(false);
-    const [emailNotifications, setEmailNotifications] = useState(true);
-    const [pushNotifications, setPushNotifications] = useState(true);
-
-    const [isSecurityModalVisible, setIsSecurityModalVisible] = useState(false);
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [savingSecurity, setSavingSecurity] = useState(false);
-
-    async function loadStats() {
-        try {
-            // 1. Count user's groups
-            const { count: groupsCount, error: groupsError } = await supabase
-                .from('group_members')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', currentUser.id);
-
-            if (groupsError) throw groupsError;
-
-            // 2. Sum user's total paid expenses
-            const { data: expensesData, error: expensesError } = await supabase
-                .from('expenses')
-                .select('valor')
-                .eq('paid_by', currentUser.id)
-                .not('descricao', 'ilike', 'Liquidação%'); // Exclude settlement payments
-
-            if (expensesError) throw expensesError;
-
-            const totalPaid = expensesData ? expensesData.reduce((sum: number, item: any) => sum + Number(item.valor), 0) : 0;
-
-            setStats({
-                groupsCount: groupsCount || 0,
-                totalPaid: totalPaid
-            });
-        } catch (err) {
-            console.error("Erro ao carregar estatísticas:", err);
-        } finally {
-            setLoadingStats(false);
-            setRefreshing(false);
-        }
-    }
-
-    useEffect(() => {
-        loadStats();
-        refreshConsolidatedBalance();
-
-        const unsubscribe = navigation?.addListener('focus', () => {
-            loadStats();
-            refreshConsolidatedBalance();
-        });
-
-        return unsubscribe;
-    }, [navigation, currentUser.id]);
-
-    const handleRefresh = async () => {
-        setRefreshing(true);
-        await Promise.all([
-            loadStats(),
-            refreshConsolidatedBalance()
-        ]);
-    };
-
-    function handleLogout() {
-        if (Platform.OS === 'web') {
-            const confirmLogout = window.confirm("Deseja realmente sair da sua conta?");
-            if (confirmLogout) {
-                signOut();
-            }
-        } else {
-            Alert.alert(
-                "Sair",
-                "Deseja realmente sair da sua conta?",
-                [
-                    { text: "Cancelar", style: "cancel" },
-                    { text: "Sair", onPress: signOut, style: "destructive" }
-                ]
-            );
-        }
-    }
-
-    async function handleSaveProfile() {
-        if (!editName.trim()) {
-            if (Platform.OS === 'web') {
-                window.alert("Por favor, preencha o nome.");
-            } else {
-                Alert.alert("Erro", "Por favor, preencha o nome.");
-            }
-            return;
-        }
-
-        setSavingProfile(true);
-        try {
-            // Update public.users
-            const { error: updateError } = await supabase
-                .from('users')
-                .update({ nome: editName.trim() })
-                .eq('id', currentUser.id);
-
-            if (updateError) throw updateError;
-
-            // Update Auth metadata for consistency
-            await supabase.auth.updateUser({
-                data: { nome: editName.trim() }
-            });
-
-            // Refresh profile context
-            if (session?.user) {
-                await fetchUserProfile(session.user);
-            }
-
-            setIsEditModalVisible(false);
-            if (Platform.OS === 'web') {
-                window.alert("Perfil atualizado com sucesso!");
-            } else {
-                Alert.alert("Sucesso", "Perfil atualizado com sucesso!");
-            }
-        } catch (err: any) {
-            console.error("Erro ao salvar perfil:", err);
-            if (Platform.OS === 'web') {
-                window.alert("Erro ao salvar perfil: " + err.message);
-            } else {
-                Alert.alert("Erro", err.message || "Erro desconhecido.");
-            }
-        } finally {
-            setSavingProfile(false);
-        }
-    }
-
-    async function handleSaveSecurity() {
-        if (newPassword.length < 6) {
-            const msg = "A senha deve ter pelo menos 6 caracteres.";
-            if (Platform.OS === 'web') window.alert(msg);
-            else Alert.alert("Erro", msg);
-            return;
-        }
-
-        if (newPassword !== confirmPassword) {
-            const msg = "As senhas não coincidem.";
-            if (Platform.OS === 'web') window.alert(msg);
-            else Alert.alert("Erro", msg);
-            return;
-        }
-
-        setSavingSecurity(true);
-        try {
-            const { error } = await supabase.auth.updateUser({
-                password: newPassword
-            });
-
-            if (error) throw error;
-
-            setIsSecurityModalVisible(false);
-            setNewPassword('');
-            setConfirmPassword('');
-            const successMsg = "Sua senha foi atualizada com sucesso!";
-            if (Platform.OS === 'web') window.alert(successMsg);
-            else Alert.alert("Sucesso", successMsg);
-        } catch (err: any) {
-            console.error("Erro ao alterar senha:", err);
-            if (Platform.OS === 'web') window.alert(err.message);
-            else Alert.alert("Erro ao alterar senha", err.message || "Tente novamente.");
-        } finally {
-            setSavingSecurity(false);
-        }
-    }
-
-    function handleSavePayments() {
-        setSavingPayments(true);
-        setTimeout(() => {
-            setSavingPayments(false);
-            setIsPaymentsModalVisible(false);
-            const msg = "Chave PIX preferencial salva com sucesso!";
-            if (Platform.OS === 'web') window.alert(msg);
-            else Alert.alert("Sucesso", msg);
-        }, 600);
-    }
-
-    // Determine balance card colors based on value
-    const balanceColor = consolidatedBalance > 0 
-        ? { bg: '#dcfce7', iconBg: '#bbf7d0', text: '#16a34a' } 
-        : consolidatedBalance < 0 
-            ? { bg: '#fee2e2', iconBg: '#fecaca', text: '#dc2626' } 
-            : { bg: '#f1f5f9', iconBg: '#e2e8f0', text: '#64748b' };
 
     return (
         <ScrollView
@@ -251,7 +86,7 @@ export default function ProfileScreen({ navigation }: any) {
                 <Text style={styles.name}>{currentUser.nome}</Text>
                 <Text style={styles.email}>{currentUser.email}</Text>
 
-                <TouchableOpacity style={styles.editButton} onPress={() => { setEditName(currentUser.nome); setIsEditModalVisible(true); }}>
+                <TouchableOpacity style={styles.editButton} onPress={openEditProfileModal}>
                     <UserRound size={18} color="#112332" />
                     <Text style={styles.editButtonText}>Editar perfil</Text>
                 </TouchableOpacity>
@@ -297,7 +132,7 @@ export default function ProfileScreen({ navigation }: any) {
                     icon={<Mail size={22} color="#112332" />}
                     title="Dados pessoais"
                     subtitle="Nome, e-mail e informações da conta"
-                    onPress={() => { setEditName(currentUser.nome); setIsEditModalVisible(true); }}
+                    onPress={openEditProfileModal}
                 />
 
                 <ProfileOption

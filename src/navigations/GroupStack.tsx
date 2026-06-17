@@ -1,7 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import GroupsScreen from "../screens/groups/GroupsScreen";
 import GroupDetailsScreen from "../screens/groups/GroupDetailsScreen";
-import AddExpenseModal from "../screens/groups/AddExpenseModal";
+// import AddExpenseModal from "../screens/groups/AddExpenseModal";
 import CreateGroupScreen from "../screens/groups/createGroupForm";
 
 
@@ -28,13 +28,13 @@ export function GroupStack() {
                 component={GroupDetailsScreen}
             />
 
-            <Stack.Screen
+            {/* <Stack.Screen
                 name="AddExpense"
                 component={AddExpenseModal}
                 options={{
                     presentation: "modal"
                 }}
-            />
+            /> */}
 
         </Stack.Navigator>
     );

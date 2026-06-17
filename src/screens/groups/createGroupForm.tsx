@@ -5,16 +5,16 @@ import { View,
     Text,
     TextInput,
     TouchableOpacity,
-    Alert,
     ActivityIndicator,
-    Platform
 } from 'react-native';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { styles } from '../../styles/groups/createGroupForm.styles';
+import { useToast } from '../../components/Toast/Toast';
 
 export default function CreateGroupScreen({ navigation }: any) {
     const { user, refreshConsolidatedBalance } = useAuth();
+    const { showToast } = useToast();
     const [nome, setNome] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('Casa');
     const [loading, setLoading] = useState(false);
@@ -29,18 +29,26 @@ export default function CreateGroupScreen({ navigation }: any) {
 
     async function handleCreateGroup() {
         if (!nome.trim()) {
-            Alert.alert("Erro", "Por favor, digite o nome do Racha.");
+            showToast({
+                variant: 'warning',
+                title: 'Nome obrigatório',
+                message: 'Por favor, digite o nome do Racha.',
+            });
             return;
         }
 
         if (!user) {
-            Alert.alert("Erro", "Usuário não autenticado.");
+            showToast({
+                variant: 'destructive',
+                title: 'Sessão inválida',
+                message: 'Usuário não autenticado.',
+            });
             return;
         }
 
         setLoading(true);
         try {
-            // Call the database function to create the group and add the user as a member atomically
+            
             const { data: groupData, error: groupError } = await supabase
                 .rpc('create_group_with_member', {
                     group_name: nome.trim(),
@@ -50,20 +58,24 @@ export default function CreateGroupScreen({ navigation }: any) {
             if (groupError) throw groupError;
 
             if (groupData) {
-                // Refresh consolidated balance and go back
+
                 await refreshConsolidatedBalance();
-                if (Platform.OS === 'web') {
-                    window.alert("Racha criado com sucesso!");
+                showToast({
+                    variant: 'success',
+                    title: 'Racha criado',
+                    message: 'Seu grupo foi criado com sucesso.',
+                });
+                setTimeout(() => {
                     navigation.goBack();
-                } else {
-                    Alert.alert("Sucesso", "Racha criado com sucesso!", [
-                        { text: "OK", onPress: () => navigation.goBack() }
-                    ]);
-                }
+                }, 700);
             }
         } catch (error: any) {
             console.error("Erro ao criar grupo:", error);
-            Alert.alert("Erro ao criar grupo", error.message || "Erro desconhecido.");
+            showToast({
+                variant: 'destructive',
+                title: 'Erro ao criar grupo',
+                message: error.message || 'Erro desconhecido.',
+            });
         } finally {
             setLoading(false);
         }

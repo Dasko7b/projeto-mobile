@@ -9,7 +9,6 @@ import {
     View,
     Alert,
     ActivityIndicator,
-    Platform
 } from 'react-native';
 import { Flame, LogIn, LayersPlus, Link, X, UsersRound } from 'lucide-react-native';
 import { supabase } from '../../services/supabase';
@@ -18,6 +17,7 @@ import GroupCard from '../../components/GroupCard/GroupCard';
 import EmptyState from '../../components/EmptyState/EmptyState';
 import Loading from '../../components/Loading/Loading';
 import { styles } from '../../styles/groups/GroupsScreen.styles';
+import { useToast } from '../../components/Toast/Toast';
 
 type GroupData = {
     id: string;
@@ -31,6 +31,7 @@ const PASTEL_COLORS = ['#AEE7F8', '#F2F56B', '#9EF0A8', '#F8AEEC', '#F8B6AE'];
 
 export default function GroupsScreen({ navigation }: any) {
     const { user, refreshConsolidatedBalance } = useAuth();
+    const { showToast } = useToast();
     const [groups, setGroups] = useState<GroupData[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -44,7 +45,7 @@ export default function GroupsScreen({ navigation }: any) {
     async function loadGroups() {
         if (!user) return;
         try {
-            // RLS automatically filters groups where user is a member
+
             const { data, error } = await supabase
                 .from('groups')
                 .select(`
@@ -60,10 +61,9 @@ export default function GroupsScreen({ navigation }: any) {
 
             if (data) {
                 const mapped: GroupData[] = data.map((g: any) => {
-                    // Get tutor/creator name (or first member's name as representative)
+                    
                     const tutorName = g.group_members?.[0]?.users?.nome || 'Membro';
                     
-                    // Generate a stable color based on group ID hash
                     const hash = g.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
                     const color = PASTEL_COLORS[Math.abs(hash) % PASTEL_COLORS.length];
 
@@ -135,35 +135,34 @@ export default function GroupsScreen({ navigation }: any) {
     async function handleJoinGroupSubmit() {
         const inviteCode = groupLink.trim();
         if (!inviteCode) {
-            if (Platform.OS === 'web') {
-                window.alert("Por favor, digite o código ou cole o link do grupo.");
-            } else {
-                Alert.alert("Erro", "Por favor, digite o código ou cole o link do grupo.");
-            }
+            showToast({
+                variant: 'warning',
+                title: 'Informe o código',
+                message: 'Por favor, digite o código ou cole o link do grupo.',
+            });
             return;
         }
 
-        // Handle case where user pastes deep link like fechaconta://grupo/UUID
+        
         let cleanedId = inviteCode;
         if (inviteCode.includes('://')) {
             const parts = inviteCode.split('/');
             cleanedId = parts[parts.length - 1];
         }
 
-        // Basic UUID validation regex
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(cleanedId)) {
-            if (Platform.OS === 'web') {
-                window.alert("O código do grupo deve ser um identificador UUID válido.");
-            } else {
-                Alert.alert("Código inválido", "O código do grupo deve ser um identificador UUID válido.");
-            }
+            showToast({
+                variant: 'warning',
+                title: 'Código inválido',
+                message: 'O código do grupo deve ser um identificador UUID válido.',
+            });
             return;
         }
 
         setJoinLoading(true);
         try {
-            // Insert member directly (RLS prevents select beforehand because user is not a member yet)
+            
             const { error: joinError } = await supabase
                 .from('group_members')
                 .insert({
@@ -172,23 +171,23 @@ export default function GroupsScreen({ navigation }: any) {
                 });
 
             if (joinError) {
-                if (joinError.code === '23505') { // Unique constraint violation
-                    if (Platform.OS === 'web') {
-                        window.alert("Você já participa deste grupo!");
-                    } else {
-                        Alert.alert("Aviso", "Você já participa deste grupo!");
-                    }
-                } else if (joinError.code === '23503') { // Foreign key constraint violation (group doesn't exist)
-                    if (Platform.OS === 'web') {
-                        window.alert("Grupo não encontrado. Verifique o código e tente novamente.");
-                    } else {
-                        Alert.alert("Grupo não encontrado", "Verifique o código e tente novamente.");
-                    }
+                if (joinError.code === '23505') { 
+                    showToast({
+                        variant: 'warning',
+                        title: 'Você já participa',
+                        message: 'Você já faz parte deste grupo.',
+                    });
+                } else if (joinError.code === '23503') {
+                    showToast({
+                        variant: 'destructive',
+                        title: 'Grupo não encontrado',
+                        message: 'Verifique o código e tente novamente.',
+                    });
                 } else {
                     throw joinError;
                 }
             } else {
-                // Now that the user is a member, they have access to read the group details to show the name in the alert!
+               
                 const { data: groupData } = await supabase
                     .from('groups')
                     .select('nome')
@@ -197,22 +196,22 @@ export default function GroupsScreen({ navigation }: any) {
 
                 const groupName = groupData?.nome || "Novo Racha";
 
-                if (Platform.OS === 'web') {
-                    window.alert(`Você entrou no grupo "${groupName}"!`);
-                } else {
-                    Alert.alert("Sucesso", `Você entrou no grupo "${groupName}"!`);
-                }
+                showToast({
+                    variant: 'success',
+                    title: 'Você entrou no grupo',
+                    message: `Agora você participa de "${groupName}".`,
+                });
                 handleCloseJoinModal();
                 loadGroups();
                 refreshConsolidatedBalance();
             }
         } catch (err: any) {
             console.error("Erro ao entrar no grupo:", err);
-            if (Platform.OS === 'web') {
-                window.alert("Ocorreu um erro ao tentar se associar a este grupo.");
-            } else {
-                Alert.alert("Erro ao entrar", "Ocorreu um erro ao tentar se associar a este grupo.");
-            }
+            showToast({
+                variant: 'destructive',
+                title: 'Erro ao entrar',
+                message: 'Ocorreu um erro ao tentar se associar a este grupo.',
+            });
         } finally {
             setJoinLoading(false);
         }
